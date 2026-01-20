@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify, session, send_file
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
@@ -528,6 +528,151 @@ def health():
         'ringtimes_exists': os.path.exists(RINGTIMES_PATH),
         'ringdates_exists': os.path.exists(RINGDATES_PATH)
     })
+
+# ============================================================================
+# BELL SOUNDS API
+# ============================================================================
+
+BELL_SOUNDS_DIR = os.path.join(DATA_DIR, 'bell_sounds')
+BELL_SOUNDS_META_FILE = os.path.join(DATA_DIR, 'bell_sounds_meta.json')
+
+# Create bell sounds directory
+os.makedirs(BELL_SOUNDS_DIR, exist_ok=True)
+
+def load_bell_sounds_meta():
+    try:
+        with open(BELL_SOUNDS_META_FILE, 'r') as f:
+            return json.load(f)
+    except:
+        return []
+
+def save_bell_sounds_meta(meta):
+    try:
+        with open(BELL_SOUNDS_META_FILE, 'w') as f:
+            json.dump(meta, f, indent=2)
+        return True
+    except Exception as e:
+        print(f"Error saving bell sounds meta: {e}")
+        return False
+
+@app.route('/api/bell-sounds', methods=['GET'])
+@login_required
+def get_bell_sounds():
+    meta = load_bell_sounds_meta()
+    return jsonify(meta)
+
+@app.route('/api/bell-sounds', methods=['POST'])
+@login_required
+def upload_bell_sound():
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Validate file type
+        allowed_extensions = {'mp3', 'wav', 'ogg', 'm4a', 'aac'}
+        file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+        
+        if file_ext not in allowed_extensions:
+            return jsonify({'error': 'Invalid file type. Allowed: MP3, WAV, OGG, M4A, AAC'}), 400
+        
+        # Create unique filename
+        timestamp = int(datetime.now().timestamp() * 1000)
+        safe_filename = f"{timestamp}_{file.filename}"
+        file_path = os.path.join(BELL_SOUNDS_DIR, safe_filename)
+        
+        # Save file
+        file.save(file_path)
+        file_size = os.path.getsize(file_path)
+        
+        # Create metadata
+        meta = load_bell_sounds_meta()
+        new_sound = {
+            'id': str(timestamp),
+            'name': file.filename.rsplit('.', 1)[0],
+            'fileName': file.filename,
+            'savedFileName': safe_filename,
+            'size': file_size,
+            'uploadedAt': datetime.now().isoformat()
+        }
+        
+        meta.append(new_sound)
+        save_bell_sounds_meta(meta)
+        
+        return jsonify(new_sound), 201
+        
+    except Exception as e:
+        print(f"Error uploading bell sound: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/bell-sounds/<sound_id>', methods=['GET'])
+@login_required
+def get_bell_sound_file(sound_id):
+    try:
+        meta = load_bell_sounds_meta()
+        sound = next((s for s in meta if s['id'] == sound_id), None)
+        
+        if not sound:
+            return jsonify({'error': 'Sound not found'}), 404
+        
+        file_path = os.path.join(BELL_SOUNDS_DIR, sound['savedFileName'])
+        
+        if not os.path.exists(file_path):
+            return jsonify({'error': 'File not found'}), 404
+        
+        return send_file(file_path, mimetype='audio/mpeg')
+        
+    except Exception as e:
+        print(f"Error getting bell sound file: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/bell-sounds/<sound_id>', methods=['PUT'])
+@login_required
+def update_bell_sound(sound_id):
+    try:
+        data = request.json
+        meta = load_bell_sounds_meta()
+        
+        for i, sound in enumerate(meta):
+            if sound['id'] == sound_id:
+                meta[i]['name'] = data.get('name', sound['name'])
+                save_bell_sounds_meta(meta)
+                return jsonify(meta[i])
+        
+        return jsonify({'error': 'Sound not found'}), 404
+        
+    except Exception as e:
+        print(f"Error updating bell sound: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/bell-sounds/<sound_id>', methods=['DELETE'])
+@login_required
+def delete_bell_sound(sound_id):
+    try:
+        meta = load_bell_sounds_meta()
+        sound = next((s for s in meta if s['id'] == sound_id), None)
+        
+        if not sound:
+            return jsonify({'error': 'Sound not found'}), 404
+        
+        # Delete file
+        file_path = os.path.join(BELL_SOUNDS_DIR, sound['savedFileName'])
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        
+        # Update metadata
+        meta = [s for s in meta if s['id'] != sound_id]
+        save_bell_sounds_meta(meta)
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        print(f"Error deleting bell sound: {e}")
+        return jsonify({'error': str(e)}), 500
 
 # ============================================================================
 # MAIN

@@ -1,10 +1,10 @@
 [
   {
     "color": {
-      "border": "#2dd4bf",
-      "name": "Teal",
-      "text": "#134e4a",
-      "value": "#ccfbf1"
+      "name": "Pink",
+      "value": "#fce7f3",
+      "border": "#f9a8d4",
+      "text": "#9f1239"
     },
     "id": "1767932229426",
     "isDefault": false,
@@ -36,19 +36,35 @@
     ]
   },
   {
-    "id": "1768812033294",
-    "name": "Buddy",
-    "mode": "Buddy",
-    "isDefault": false,
     "color": {
-      "name": "Pink",
-      "value": "#fce7f3",
       "border": "#f9a8d4",
-      "text": "#9f1239"
+      "name": "Pink",
+      "text": "#9f1239",
+      "value": "#fce7f3"
     },
+    "id": "1768812033294",
+    "isDefault": false,
+    "mode": "Buddy",
+    "name": "Buddy",
     "times": [
       {
-        "time": "15:40",
+        "description": "bud",
+        "time": "15:40"
+      },
+      {
+        "time": "15:29",
+        "description": "bud"
+      },
+      {
+        "time": "15:32",
+        "description": "bud"
+      },
+      {
+        "time": "15:31",
+        "description": "bud"
+      },
+      {
+        "time": "03:28",
         "description": "bud"
       }
     ]
@@ -86,6 +102,24 @@
       {
         "time": "11:37",
         "description": "Lunch"
+      }
+    ]
+  },
+  {
+    "id": "1768898557720",
+    "name": "no ball",
+    "mode": "no ball",
+    "isDefault": false,
+    "color": {
+      "name": "Lime",
+      "value": "#ecfccb",
+      "border": "#a3e635",
+      "text": "#365314"
+    },
+    "times": [
+      {
+        "time": "17:44",
+        "description": "lsdf"
       }
     ]
   }

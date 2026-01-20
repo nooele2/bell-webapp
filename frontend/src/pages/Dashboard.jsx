@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, List, Filter, CalendarPlus, Settings } from 'lucide-react';import Header from '../components/Header';
+import { Calendar, List, Filter, CalendarPlus, Settings } from 'lucide-react';
+import Header from '../components/Header';
 import StatusSummary from '../components/StatusSummary';
 import CalendarView from '../components/CalendarView';
 import ListView from '../components/ListView';
 import DateDetailsModal from '../components/DateDetailsModal';
 import BulkScheduleModal from '../components/BulkScheduleModal';
+import AddBellSound from '../pages/AddBellSound';
 import { getSchedules, getAssignments, createAssignment, updateAssignment, deleteAssignment } from '../services/api';
 
 function Dashboard({ user, onLogout, onManageSchedules }) {
@@ -17,6 +19,7 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
   const [selectedDates, setSelectedDates] = useState([]);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showBellSounds, setShowBellSounds] = useState(false);
 
   const loadData = async () => {
     try {
@@ -176,9 +179,18 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
     );
   }
 
+  if (showBellSounds) {
+    return <AddBellSound onBack={() => setShowBellSounds(false)} />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header user={user} onLogout={onLogout} onManageSchedules={onManageSchedules} />
+      <Header 
+        user={user} 
+        onLogout={onLogout} 
+        onManageSchedules={onManageSchedules}
+        onManageBellSounds={() => setShowBellSounds(true)}
+      />
 
       <div className="max-w-7xl mx-auto p-6">
         <StatusSummary schedules={schedules} dateAssignments={dateAssignments} />

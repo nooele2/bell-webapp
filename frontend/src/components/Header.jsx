@@ -1,7 +1,7 @@
 import React from 'react';
 import { LogOut, Bell } from 'lucide-react';
 
-function Header({ user, onLogout }) {
+function Header({ user, onLogout, onManageSchedules, onManageBellSounds }) {
   return (
     <nav className="bg-white shadow-sm border-b">
       <div className="max-w-7xl mx-auto px-6 py-4">
@@ -12,7 +12,7 @@ function Header({ user, onLogout }) {
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-600">{user.email}</span>
             <button
-              onClick={() => alert('Add Bell Sound - Coming Soon!')}
+              onClick={onManageBellSounds}
               className="text-blue-600 hover:text-blue-700 flex items-center gap-2 px-3 py-2 rounded-md hover:bg-blue-50 transition-colors"
             >
               <Bell size={18} /> Add Bell Sound

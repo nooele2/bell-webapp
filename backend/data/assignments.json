@@ -99,6 +99,56 @@
     "id": "176887680708414",
     "date": "2026-01-20",
     "scheduleId": "1768812033294",
+    "description": "",
+    "customTimes": [
+      {
+        "description": "bud",
+        "time": "15:40"
+      },
+      {
+        "description": "bud",
+        "time": "15:29"
+      },
+      {
+        "time": "08:35",
+        "description": "bud"
+      }
+    ]
+  },
+  {
+    "id": "176889753899315",
+    "date": "2026-03-10",
+    "scheduleId": "1768812033294",
+    "description": ""
+  },
+  {
+    "id": "176889805555116",
+    "date": "2026-01-05",
+    "scheduleId": "1768812033294",
+    "description": ""
+  },
+  {
+    "id": "176889805555118",
+    "date": "2026-01-08",
+    "scheduleId": "1768812055890",
+    "description": ""
+  },
+  {
+    "id": "176889805555119",
+    "date": "2026-01-09",
+    "scheduleId": "1768812033294",
+    "description": ""
+  },
+  {
+    "id": "176889828586319",
+    "date": "2026-01-22",
+    "scheduleId": "1767932229426",
+    "description": ""
+  },
+  {
+    "id": "176889828586320",
+    "date": "2026-01-30",
+    "scheduleId": "1767932229426",
     "description": ""
   }
 ]
