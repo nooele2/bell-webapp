@@ -2,10 +2,24 @@ import React, { useState } from 'react';
 import { X, Calendar, Plus, Trash2, AlertCircle } from 'lucide-react';
 import { parseDate, formatDisplayDate } from '../utils/dateUtils';
 
+// System "No Bell" schedule
+const SYSTEM_NO_BELL_SCHEDULE = {
+  id: 'system-no-bell',
+  name: 'No Bell',
+  mode: 'No Bell',
+  isDefault: false,
+  isSystem: true,
+  color: { name: 'Gray', value: '#f3f4f6', text: '#374151' },
+  times: []
+};
+
 function BulkScheduleModal({ selectedDates, schedules, onClose, onSave, isListViewMode, dateAssignments }) {
   const [selectedSchedule, setSelectedSchedule] = useState('');
   const [description, setDescription] = useState('');
   const [manualDates, setManualDates] = useState(['']);
+
+  // Include system "No Bell" schedule in the available schedules
+  const availableSchedules = [SYSTEM_NO_BELL_SCHEDULE, ...schedules];
 
   // Check which selected dates already have schedules
   const datesWithSchedules = selectedDates.filter(dateStr => 
@@ -187,9 +201,10 @@ function BulkScheduleModal({ selectedDates, schedules, onClose, onSave, isListVi
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Choose a schedule...</option>
-              {schedules.map((schedule) => (
+              {availableSchedules.map((schedule) => (
                 <option key={schedule.id} value={schedule.id}>
                   {schedule.name}
+                  {schedule.isSystem ? ' (System)' : ''}
                 </option>
               ))}
             </select>

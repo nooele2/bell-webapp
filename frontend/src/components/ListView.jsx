@@ -1,13 +1,31 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { formatDate, parseDate } from '../utils/dateUtils';
+import { Filter } from 'lucide-react';
 
-function ListView({ schedules, dateAssignments, filterMode, onDateClick, isSelectionMode, selectedDates }) {
-  const filteredAssignments = filterMode
-    ? dateAssignments.filter(a => {
-        const schedule = schedules.find(s => s.id === a.scheduleId);
-        return schedule && schedule.mode === filterMode;
-      })
-    : dateAssignments;
+function ListView({ schedules, dateAssignments, onDateClick, isSelectionMode, selectedDates }) {
+  const [filterScheduleId, setFilterScheduleId] = useState('all');
+
+  // Include system "No Bell" schedule
+  const SYSTEM_NO_BELL_SCHEDULE = {
+    id: 'system-no-bell',
+    name: 'No Bell',
+    isSystem: true
+  };
+
+  const allSchedules = [SYSTEM_NO_BELL_SCHEDULE, ...schedules];
+
+  // Calculate count for each schedule
+  const getScheduleCount = (scheduleId) => {
+    if (scheduleId === 'all') {
+      return dateAssignments.length;
+    }
+    return dateAssignments.filter(a => a.scheduleId === scheduleId).length;
+  };
+
+  // Filter assignments based on selected schedule
+  const filteredAssignments = filterScheduleId === 'all'
+    ? dateAssignments
+    : dateAssignments.filter(a => a.scheduleId === filterScheduleId);
 
   // Group assignments by date - keep only the first assignment per date
   const dateMap = new Map();
@@ -25,16 +43,33 @@ function ListView({ schedules, dateAssignments, filterMode, onDateClick, isSelec
   const today = formatDate(new Date());
 
   const getScheduleColor = (scheduleId) => {
-    const schedule = schedules.find(s => s.id === scheduleId);
-    // Default to green if not set
-    const defaultColor = { value: '#d1fae5', border: '#34d399', text: '#065f46' };
+    // Check if it's the system "No Bell" schedule
+    if (scheduleId === 'system-no-bell') {
+      return { value: '#fee2e2', border: '#ef4444', text: '#991b1b' }; // Light red background, strong red border
+    }
     
-    if (!schedule || !schedule.color) {
-      return defaultColor;
+    const schedule = schedules.find(s => s.id === scheduleId);
+    
+    if (!schedule) {
+      // Default to gray if schedule not found
+      return { value: '#f3f4f6', border: '#6b7280', text: '#374151' };
+    }
+    
+    if (!schedule.color) {
+      // Default to green if color not set
+      return { value: '#d1fae5', border: '#10b981', text: '#065f46' };
     }
     
     // Return the schedule's color (works for both preset and custom colors)
     return schedule.color;
+  };
+
+  const getScheduleName = (scheduleId) => {
+    if (scheduleId === 'system-no-bell') {
+      return 'No Bell';
+    }
+    const schedule = schedules.find(s => s.id === scheduleId);
+    return schedule?.name || 'Unknown';
   };
 
   if (isSelectionMode) {
@@ -52,100 +87,141 @@ function ListView({ schedules, dateAssignments, filterMode, onDateClick, isSelec
     );
   }
 
+  // Group assignments by month
+  const groupedByMonth = sortedAssignments.reduce((groups, assignment) => {
+    const date = parseDate(assignment.date);
+    const monthYear = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+    
+    if (!groups[monthYear]) {
+      groups[monthYear] = [];
+    }
+    groups[monthYear].push(assignment);
+    return groups;
+  }, {});
+
   return (
-    <div className="bg-white rounded-lg shadow-md">
-      {sortedAssignments.length === 0 ? (
-        <div className="p-12 text-center text-gray-500">
-          <div className="text-lg font-medium mb-2">No scheduled dates found</div>
-          <div className="text-sm">Click on a date in the calendar to assign a schedule</div>
+    <>
+      {/* Filter Dropdown - Separate card above the list */}
+      <div className="mb-4 p-4 bg-white rounded-lg shadow-md border border-gray-200">
+        <div className="flex items-center gap-3">
+          <Filter size={18} className="text-gray-600" />
+          <select
+            value={filterScheduleId}
+            onChange={(e) => setFilterScheduleId(e.target.value)}
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          >
+            <option value="all">All Schedules ({getScheduleCount('all')})</option>
+            {allSchedules.map((schedule) => {
+              const count = getScheduleCount(schedule.id);
+              if (count === 0) return null; // Don't show schedules with 0 assignments
+              return (
+                <option key={schedule.id} value={schedule.id}>
+                  {schedule.name} ({count})
+                </option>
+              );
+            })}
+          </select>
         </div>
-      ) : (
-        <div className="divide-y divide-gray-200">
-          {sortedAssignments.map(assignment => {
-            const schedule = schedules.find(s => s.id === assignment.scheduleId);
-            const date = parseDate(assignment.date);
-            const isTodayDate = assignment.date === today;
-            const schedColor = getScheduleColor(assignment.scheduleId);
-            
-            return schedule ? (
-              <div
-                key={assignment.id}
-                onClick={() => onDateClick(date)}
-                className={`p-5 hover:bg-gray-50 cursor-pointer transition-all border-l-4 ${
-                  isTodayDate ? 'bg-blue-50' : ''
-                }`}
-                style={{ borderLeftColor: schedColor.border }}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className={`font-medium text-lg ${isTodayDate ? 'text-blue-900' : 'text-gray-900'}`}>
-                      {date.toLocaleDateString('en-US', { 
-                        weekday: 'long', 
-                        year: 'numeric', 
-                        month: 'long', 
-                        day: 'numeric' 
-                      })}
-                      {isTodayDate && (
-                        <span className="ml-2 text-xs bg-blue-600 text-white px-2 py-0.5 rounded">
-                          Today
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 mt-2">
+      </div>
+
+      {/* List Content */}
+      <div className="bg-white rounded-lg shadow-md">
+        {sortedAssignments.length === 0 ? (
+          <div className="p-12 text-center text-gray-500">
+            <div className="text-lg font-medium mb-2">
+              {filterScheduleId === 'all' 
+                ? 'No scheduled dates found' 
+                : `No dates found for "${allSchedules.find(s => s.id === filterScheduleId)?.name}" schedule`
+              }
+            </div>
+            <div className="text-sm">
+              {filterScheduleId === 'all'
+                ? 'Click on a date in the calendar to assign a schedule'
+                : 'Select "All Schedules" to see all assignments'
+              }
+            </div>
+          </div>
+        ) : (
+          <div>
+            {Object.entries(groupedByMonth).map(([monthYear, assignments]) => (
+              <div key={monthYear}>
+                {/* Month Header */}
+                <div className="bg-gray-100 px-6 py-3 border-b border-gray-300 sticky top-0 z-10">
+                  <h3 className="text-lg font-bold text-gray-900">{monthYear}</h3>
+                </div>
+                
+                {/* Assignments for this month */}
+                <div className="divide-y divide-gray-200">
+                  {assignments.map(assignment => {
+                    const schedule = schedules.find(s => s.id === assignment.scheduleId);
+                    const isNoBell = assignment.scheduleId === 'system-no-bell';
+                    const scheduleName = getScheduleName(assignment.scheduleId);
+                    const date = parseDate(assignment.date);
+                    const isTodayDate = assignment.date === today;
+                    const schedColor = getScheduleColor(assignment.scheduleId);
+                    
+                    return (
                       <div
-                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 font-medium"
-                        style={{
-                          backgroundColor: schedColor.value,
-                          borderColor: schedColor.border,
-                          color: schedColor.text
-                        }}
+                        key={assignment.id}
+                        onClick={() => onDateClick(date)}
+                        className={`p-5 hover:bg-gray-50 cursor-pointer transition-all border-l-[6px] ${
+                          isTodayDate ? 'bg-blue-50' : ''
+                        }`}
+                        style={{ borderLeftColor: schedColor.border }}
                       >
-                        <div 
-                          className="w-2 h-2 rounded-full"
-                          style={{ backgroundColor: schedColor.border }}
-                        />
-                        {schedule.name}
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className={`font-medium text-lg ${isTodayDate ? 'text-blue-900' : 'text-gray-900'}`}>
+                              {date.toLocaleDateString('en-US', { 
+                                weekday: 'long', 
+                                month: 'long', 
+                                day: 'numeric' 
+                              })}
+                              {isTodayDate && (
+                                <span className="ml-2 text-xs bg-blue-600 text-white px-2 py-0.5 rounded">
+                                  Today
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-2">
+                              {/* Only small tag */}
+                              <span 
+                                className="text-xs px-2 py-1 rounded font-medium"
+                                style={{
+                                  backgroundColor: schedColor.value,
+                                  color: schedColor.text
+                                }}
+                              >
+                                {scheduleName}
+                              </span>
+                              {isNoBell && (
+                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                  System
+                                </span>
+                              )}
+                              {assignment.customTimes && (
+                                <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                                  Custom Times
+                                </span>
+                              )}
+                            </div>
+                            {assignment.description && (
+                              <div className="text-sm text-gray-600 mt-2 italic">
+                                "{assignment.description}"
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <span 
-                        className="text-xs px-2 py-1 rounded"
-                        style={{
-                          backgroundColor: schedColor.value,
-                          color: schedColor.text
-                        }}
-                      >
-                        {schedule.mode}
-                      </span>
-                      {assignment.customTimes && (
-                        <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
-                          Custom Times
-                        </span>
-                      )}
-                    </div>
-                    {assignment.description && (
-                      <div className="text-sm text-gray-600 mt-2 italic">
-                        "{assignment.description}"
-                      </div>
-                    )}
-                  </div>
-                  <div className="ml-4">
-                    <div 
-                      className="w-12 h-12 rounded-lg border-2 flex items-center justify-center font-bold text-lg"
-                      style={{
-                        backgroundColor: schedColor.value,
-                        borderColor: schedColor.border,
-                        color: schedColor.text
-                      }}
-                    >
-                      {date.getDate()}
-                    </div>
-                  </div>
+                    );
+                  })}
                 </div>
               </div>
-            ) : null;
-          })}
-        </div>
-      )}
-    </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 

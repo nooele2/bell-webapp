@@ -41,8 +41,14 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
 
   const getScheduleColor = (scheduleId) => {
     const schedule = schedules.find(s => s.id === scheduleId);
+    
+    // Check if it's the system "No Bell" schedule
+    if (scheduleId === 'system-no-bell') {
+      return { value: '#fee2e2', border: '#ef4444', text: '#991b1b' }; // Light red background, strong red border
+    }
+    
     // Default to green if not set
-    const defaultColor = { value: '#d1fae5', border: '#34d399', text: '#065f46' };
+    const defaultColor = { value: '#d1fae5', border: '#10b981', text: '#065f46' };
     
     if (!schedule || !schedule.color) {
       return defaultColor;
@@ -64,7 +70,7 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
   };
 
   const defaultSchedule = getDefaultSchedule();
-  const defaultColor = defaultSchedule?.color || { value: '#fef3c7', border: '#fde047', text: '#854d0e' };
+  const defaultColor = defaultSchedule?.color || { value: '#fef3c7', border: '#fbbf24', text: '#854d0e' };
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
@@ -83,7 +89,32 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
         >
           <ChevronLeft size={20} />
         </button>
-        <h2 className="text-xl font-semibold text-gray-900">{monthName}</h2>
+        
+        <div className="flex items-center gap-2">
+          {/* Month Selector */}
+          <select
+            value={currentMonth.getMonth()}
+            onChange={(e) => setCurrentMonth(new Date(currentMonth.getFullYear(), parseInt(e.target.value), 1))}
+            className="px-3 py-1.5 text-base font-semibold text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
+          >
+            {['January', 'February', 'March', 'April', 'May', 'June', 
+              'July', 'August', 'September', 'October', 'November', 'December'].map((month, index) => (
+              <option key={month} value={index}>{month}</option>
+            ))}
+          </select>
+          
+          {/* Year Selector */}
+          <select
+            value={currentMonth.getFullYear()}
+            onChange={(e) => setCurrentMonth(new Date(parseInt(e.target.value), currentMonth.getMonth(), 1))}
+            className="px-3 py-1.5 text-base font-semibold text-gray-900 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
+          >
+            {Array.from({ length: 11 }, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+        </div>
+        
         <button
           onClick={nextMonth}
           className="p-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
@@ -120,17 +151,19 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
             <div
               key={index}
               onClick={() => date && isClickable && onDateClick(date)}
-              className={`min-h-24 p-2 border-2 rounded-md transition-all relative ${
+              className={`min-h-24 p-2 rounded-lg transition-all relative ${
                 !date ? 'bg-gray-50 cursor-default' : 
-                isWeekendDay ? 'bg-gray-100 border-gray-300 cursor-not-allowed' :
-                isSelected ? 'bg-green-100 border-green-400 ring-2 ring-green-300 cursor-pointer' :
-                isTodayDate ? 'ring-2 ring-blue-400 cursor-pointer' :
+                isWeekendDay ? 'bg-white border border-gray-200 cursor-not-allowed' :
+                isSelected ? 'bg-green-100 border-2 border-green-400 ring-2 ring-green-300 cursor-pointer' :
+                isTodayDate ? 'border-4 border-blue-600 shadow-lg cursor-pointer' :
                 isSelectionMode && dateHasAssignment ? 'cursor-not-allowed' :
                 'hover:shadow-md cursor-pointer'
               }`}
-              style={!isWeekendDay && !isSelected && date ? {
-                backgroundColor: cellColor.value,
-                borderColor: cellColor.border
+              style={!isWeekendDay && !isSelected && !isTodayDate && date ? {
+                backgroundColor: cellColor.value
+              } : isTodayDate && date ? {
+                backgroundColor: '#3b82f6',
+                borderColor: '#1d4ed8'
               } : {}}
             >
               {date && (
@@ -147,10 +180,10 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
                     </div>
                   )}
                   
-                  <div className={`text-sm font-medium mb-1 ${
+                  <div className={`text-base font-black mb-1 ${
+                    isTodayDate ? 'text-white text-2xl' :
                     isSelected ? 'text-green-700' :
-                    isTodayDate ? 'text-blue-700' : 
-                    isWeekendDay ? 'text-gray-400' :
+                    isWeekendDay ? 'text-gray-500' :
                     'text-gray-900'
                   }`}
                   style={!isWeekendDay && !isSelected && !isTodayDate && date ? {
@@ -168,21 +201,49 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
                         </div>
                       )}
                       
-                      {!isWeekendDay && assignments.length === 0 && defaultSchedule && (
-                        <div className="text-xs text-center font-medium" style={{ color: defaultColor.text }}>
+                      {!isWeekendDay && assignments.length === 0 && defaultSchedule && !isTodayDate && (
+                        <div 
+                          className="text-xs text-center font-medium bg-white rounded px-1.5 py-0.5 border-2"
+                          style={{ 
+                            borderColor: defaultColor.border,
+                            color: defaultColor.text 
+                          }}
+                        >
                           {defaultSchedule.name}
                         </div>
                       )}
                       
-                      {assignments.length > 0 && (
+                      {!isWeekendDay && assignments.length === 0 && defaultSchedule && isTodayDate && (
+                        <div className="text-xs text-center font-bold text-white">
+                          {defaultSchedule.name}
+                        </div>
+                      )}
+                      
+                      {assignments.length > 0 && !isTodayDate && (
                         <div className="space-y-1">
                           {assignments.slice(0, 3).map(assignment => {
                             const schedule = schedules.find(s => s.id === assignment.scheduleId);
+                            const isNoBell = assignment.scheduleId === 'system-no-bell';
                             const schedColor = getScheduleColor(assignment.scheduleId);
+                            
+                            // For No Bell, show directly on the cell background
+                            if (isNoBell) {
+                              return (
+                                <div
+                                  key={assignment.id}
+                                  className="text-xs text-center font-bold"
+                                  style={{ color: schedColor.text }}
+                                  title="No Bell"
+                                >
+                                  No Bell
+                                </div>
+                              );
+                            }
+                            
                             return schedule ? (
                               <div
                                 key={assignment.id}
-                                className="text-xs bg-white rounded px-1.5 py-0.5 truncate shadow-sm border font-medium"
+                                className="text-xs bg-white rounded px-1.5 py-0.5 truncate shadow-sm border-2 font-medium"
                                 style={{ 
                                   borderColor: schedColor.border,
                                   color: schedColor.text
@@ -195,6 +256,42 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
                           })}
                           {assignments.length > 3 && (
                             <div className="text-xs px-1" style={{ color: cellColor.text }}>
+                              +{assignments.length - 3} more
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
+                      {assignments.length > 0 && isTodayDate && (
+                        <div className="space-y-1">
+                          {assignments.slice(0, 3).map(assignment => {
+                            const schedule = schedules.find(s => s.id === assignment.scheduleId);
+                            const isNoBell = assignment.scheduleId === 'system-no-bell';
+                            
+                            if (isNoBell) {
+                              return (
+                                <div
+                                  key={assignment.id}
+                                  className="text-xs text-center font-bold text-white"
+                                  title="No Bell"
+                                >
+                                  No Bell
+                                </div>
+                              );
+                            }
+                            
+                            return schedule ? (
+                              <div
+                                key={assignment.id}
+                                className="text-xs bg-white rounded px-1.5 py-0.5 truncate shadow-sm border-2 border-blue-700 font-bold text-blue-900"
+                                title={schedule.name}
+                              >
+                                {schedule.name}
+                              </div>
+                            ) : null;
+                          })}
+                          {assignments.length > 3 && (
+                            <div className="text-xs px-1 text-white font-bold">
                               +{assignments.length - 3} more
                             </div>
                           )}
@@ -218,8 +315,8 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
       {!isSelectionMode && (
         <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 border-2 border-blue-400 rounded ring-2 ring-blue-200"></div>
-            <span className="text-gray-600">Today</span>
+            <div className="w-5 h-5 rounded-lg bg-blue-600 border-4 border-blue-800"></div>
+            <span className="text-gray-900 font-bold">Today</span>
           </div>
           {defaultSchedule && (
             <div className="flex items-center gap-2">
@@ -233,11 +330,22 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
               <span className="text-gray-600">{defaultSchedule.name} (Default)</span>
             </div>
           )}
+          {/* Show No Bell in legend */}
+          <div className="flex items-center gap-2">
+            <div 
+              className="w-4 h-4 border-2 rounded"
+              style={{
+                backgroundColor: '#fee2e2',
+                borderColor: '#ef4444'
+              }}
+            ></div>
+            <span className="text-gray-600">No Bell</span>
+          </div>
           {schedules.filter(s => !s.isDefault).map(schedule => {
             const hasAssignments = dateAssignments.some(a => a.scheduleId === schedule.id);
             if (!hasAssignments) return null;
             
-            const schedColor = schedule.color || { value: '#d1fae5', border: '#34d399', text: '#065f46' };
+            const schedColor = schedule.color || { value: '#d1fae5', border: '#10b981', text: '#065f46' };
             return (
               <div key={schedule.id} className="flex items-center gap-2">
                 <div 
@@ -252,7 +360,7 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
             );
           })}
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-gray-100 border border-gray-300 rounded"></div>
+            <div className="w-4 h-4 bg-white border-2 border-gray-300 rounded"></div>
             <span className="text-gray-600">Weekend</span>
           </div>
         </div>

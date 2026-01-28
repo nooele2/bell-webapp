@@ -8,8 +8,30 @@
   {
     "id": "17679400620226",
     "date": "2026-01-23",
-    "scheduleId": "1767932229426",
-    "description": ""
+    "scheduleId": "1768812033294",
+    "description": "",
+    "customTimes": [
+      {
+        "description": "bud",
+        "time": "15:40"
+      },
+      {
+        "description": "bud",
+        "time": "15:29"
+      },
+      {
+        "description": "bud",
+        "time": "15:32"
+      },
+      {
+        "description": "bud",
+        "time": "15:31"
+      },
+      {
+        "description": "bud",
+        "time": "03:28"
+      }
+    ]
   },
   {
     "id": "17679400620227",
@@ -86,7 +108,7 @@
   {
     "id": "176881213964212",
     "date": "2026-01-29",
-    "scheduleId": "1768812055890",
+    "scheduleId": "1769484562323",
     "description": ""
   },
   {
@@ -124,7 +146,7 @@
   {
     "id": "176889805555116",
     "date": "2026-01-05",
-    "scheduleId": "1768812033294",
+    "scheduleId": "system-no-bell",
     "description": ""
   },
   {
@@ -149,6 +171,40 @@
     "id": "176889828586320",
     "date": "2026-01-30",
     "scheduleId": "1767932229426",
+    "description": ""
+  },
+  {
+    "id": "176939346345721",
+    "date": "2026-01-26",
+    "scheduleId": "1768812033294",
+    "description": "",
+    "customTimes": [
+      {
+        "description": "bud",
+        "time": "15:40"
+      },
+      {
+        "description": "bud",
+        "time": "15:29"
+      },
+      {
+        "description": "bud",
+        "time": "15:32"
+      },
+      {
+        "description": "bud",
+        "time": "15:31"
+      },
+      {
+        "description": "bud",
+        "time": "03:28"
+      }
+    ]
+  },
+  {
+    "id": "176948526758222",
+    "date": "2026-01-06",
+    "scheduleId": "1769485253845",
     "description": ""
   }
 ]

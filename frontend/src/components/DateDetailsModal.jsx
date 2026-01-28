@@ -1,11 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Trash2, Edit2, Save, Plus, Clock } from 'lucide-react';
 import { formatDate, formatDisplayDate } from '../utils/dateUtils';
+import { getBellSounds, getBellSoundUrl } from '../services/bellSoundsApi';
+import { BellSoundSelector } from '../components/Bellsoundselector';
+
+// System "No Bell" schedule
+const SYSTEM_NO_BELL_SCHEDULE = {
+  id: 'system-no-bell',
+  name: 'No Bell',
+  mode: 'No Bell',
+  isDefault: false,
+  isSystem: true,
+  color: { name: 'Gray', value: '#f3f4f6', text: '#374151' },
+  times: []
+};
 
 function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, onDelete }) {
   const dateStr = formatDate(date);
   const assignments = dateAssignments.filter(a => a.date === dateStr);
   const currentAssignment = assignments[0]; // Only one assignment per date
+  
+  // Include system "No Bell" schedule in the available schedules
+  const availableSchedules = [SYSTEM_NO_BELL_SCHEDULE, ...schedules];
   
   // Find default schedule
   const defaultSchedule = schedules.find(s => s.isDefault === true);
@@ -20,34 +36,114 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
   const [description, setDescription] = useState(currentAssignment?.description || '');
   const [customTimes, setCustomTimes] = useState(null);
   const [useCustomTimes, setUseCustomTimes] = useState(false);
+  const [bellSounds, setBellSounds] = useState([]);
+  const [selectedBellSoundId, setSelectedBellSoundId] = useState(null);
+  const [playingBellSoundId, setPlayingBellSoundId] = useState(null);
+  
+  const audioRef = useRef(null);
 
-  // Get the selected schedule
-  const selectedSchedule = schedules.find(s => s.id === selectedScheduleId);
+  // Get the selected schedule (check both system and regular schedules)
+  const selectedSchedule = availableSchedules.find(s => s.id === selectedScheduleId);
   
   // Get the display schedule (either assignment schedule or default)
   const displaySchedule = currentAssignment 
-    ? schedules.find(s => s.id === currentAssignment.scheduleId)
+    ? availableSchedules.find(s => s.id === currentAssignment.scheduleId)
     : defaultSchedule;
 
   // Get bell times to display
   const displayBellTimes = currentAssignment?.customTimes 
     || (currentAssignment 
-      ? schedules.find(s => s.id === currentAssignment.scheduleId)?.times
+      ? availableSchedules.find(s => s.id === currentAssignment.scheduleId)?.times
       : defaultSchedule?.times);
 
-  // Initialize custom times from current assignment or selected schedule
-  // Initialize custom times from current assignment or selected schedule
+  // Load bell sounds on mount
+  useEffect(() => {
+    loadBellSounds();
+  }, []);
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  const loadBellSounds = async () => {
+    try {
+      const sounds = await getBellSounds();
+      setBellSounds(sounds);
+    } catch (error) {
+      console.error('Failed to load bell sounds:', error);
+    }
+  };
+
+  // Initialize custom times and bell sound from current assignment or selected schedule
   useEffect(() => {
     if (currentAssignment?.customTimes) {
-      // Has custom times saved for this date
       setCustomTimes(JSON.parse(JSON.stringify(currentAssignment.customTimes)));
       setUseCustomTimes(true);
-    } else if (selectedSchedule?.times) {
-      // Use selected schedule's default times
+    } else if (selectedSchedule?.times && selectedSchedule.times.length > 0) {
       setCustomTimes(JSON.parse(JSON.stringify(selectedSchedule.times)));
       setUseCustomTimes(false);
+    } else {
+      setCustomTimes(null);
+      setUseCustomTimes(false);
     }
-  }, [currentAssignment]);
+
+    // Set bell sound - priority: assignment override > schedule default
+    if (currentAssignment?.bellSoundId !== undefined) {
+      setSelectedBellSoundId(currentAssignment.bellSoundId);
+    } else if (selectedSchedule?.bellSoundId) {
+      setSelectedBellSoundId(selectedSchedule.bellSoundId);
+    } else {
+      setSelectedBellSoundId(null);
+    }
+  }, [currentAssignment, selectedSchedule]);
+
+  const handlePlayBellSound = (soundId) => {
+    if (playingBellSoundId === soundId && audioRef.current) {
+      // Stop playing
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+      setPlayingBellSoundId(null);
+      return;
+    }
+
+    // Stop any currently playing audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
+    try {
+      const audio = new Audio(getBellSoundUrl(soundId));
+      audioRef.current = audio;
+      
+      audio.play();
+      setPlayingBellSoundId(soundId);
+      
+      audio.onended = () => {
+        setPlayingBellSoundId(null);
+        audioRef.current = null;
+      };
+
+      audio.onerror = () => {
+        console.error('Error playing audio');
+        setPlayingBellSoundId(null);
+        audioRef.current = null;
+        alert('Failed to play audio');
+      };
+    } catch (error) {
+      console.error('Playback error:', error);
+      alert('Failed to play audio');
+      setPlayingBellSoundId(null);
+      audioRef.current = null;
+    }
+  };
 
   const handleSave = async () => {
     if (!selectedScheduleId) {
@@ -55,8 +151,16 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
       return;
     }
 
-    // Validate custom times if being used
-    if (useCustomTimes && customTimes) {
+    // Stop any playing audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+      setPlayingBellSoundId(null);
+    }
+
+    const isNoBellSchedule = selectedScheduleId === 'system-no-bell';
+
+    if (!isNoBellSchedule && useCustomTimes && customTimes) {
       const hasEmptyFields = customTimes.some(t => !t.time || !t.description.trim());
       if (hasEmptyFields) {
         alert('Please fill in all bell times and descriptions');
@@ -66,26 +170,24 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
 
     try {
       if (currentAssignment) {
-        // Update existing assignment
-        // Only pass customTimes if user has modified them
         await onSave(
           [dateStr], 
           selectedScheduleId, 
           description, 
-          useCustomTimes ? customTimes : null, // Pass null if not using custom times
-          currentAssignment.id
+          (!isNoBellSchedule && useCustomTimes) ? customTimes : null,
+          currentAssignment.id,
+          selectedBellSoundId
         );
       } else {
-        // Create new assignment
         await onSave(
           [dateStr], 
           selectedScheduleId, 
           description, 
-          useCustomTimes ? customTimes : null
+          (!isNoBellSchedule && useCustomTimes) ? customTimes : null,
+          null,
+          selectedBellSoundId
         );
       }
-      
-      // Don't close editing mode here - let Dashboard handle modal closing
     } catch (error) {
       console.error('Error saving in modal:', error);
       alert('Failed to save: ' + error.message);
@@ -94,6 +196,13 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
 
   const handleDelete = async () => {
     if (window.confirm('Are you sure you want to remove this schedule assignment? The date will revert to using the default schedule.')) {
+      // Stop any playing audio
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+        setPlayingBellSoundId(null);
+      }
+      
       try {
         await onDelete(currentAssignment.id);
         onClose();
@@ -105,26 +214,30 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
   };
 
   const handleScheduleChange = (scheduleId) => {
-    console.log('Schedule changed to:', scheduleId);
     setSelectedScheduleId(scheduleId);
-    const schedule = schedules.find(s => s.id === scheduleId);
+    const schedule = availableSchedules.find(s => s.id === scheduleId);
     
-    if (schedule?.times) {
-      console.log('Loading new schedule times:', schedule.times);
-      // IMPORTANT: When schedule changes, load that schedule's times
+    if (schedule?.times && schedule.times.length > 0) {
       setCustomTimes(JSON.parse(JSON.stringify(schedule.times)));
-      // CRITICAL: Always reset to NOT using custom times when changing schedule
-      // This ensures that any previously saved custom times are discarded
       setUseCustomTimes(false);
     } else {
-      // If no times, reset everything
       setCustomTimes(null);
       setUseCustomTimes(false);
+    }
+
+    if (schedule?.bellSoundId) {
+      setSelectedBellSoundId(schedule.bellSoundId);
+    } else {
+      setSelectedBellSoundId(null);
     }
   };
 
   const addBellTime = () => {
-    setCustomTimes([...customTimes, { time: '', description: '' }]);
+    if (!customTimes) {
+      setCustomTimes([{ time: '', description: '' }]);
+    } else {
+      setCustomTimes([...customTimes, { time: '', description: '' }]);
+    }
     setUseCustomTimes(true);
   };
 
@@ -141,7 +254,6 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
     const newTimes = [...customTimes];
     newTimes[index][field] = value;
     setCustomTimes(newTimes);
-    // Mark as custom only when user manually edits
     setUseCustomTimes(true);
   };
 
@@ -151,6 +263,14 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
       setUseCustomTimes(false);
     }
   };
+
+  const getBellSoundName = (bellSoundId) => {
+    if (!bellSoundId) return 'Default Bell';
+    const sound = bellSounds.find(s => s.id === bellSoundId);
+    return sound ? sound.name : 'Default Bell';
+  };
+
+  const isNoBellSchedule = selectedScheduleId === 'system-no-bell';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -170,7 +290,14 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
             </p>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => {
+              if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current = null;
+                setPlayingBellSoundId(null);
+              }
+              onClose();
+            }}
             className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
           >
             <X size={24} />
@@ -195,6 +322,11 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
                             Default
                           </span>
                         )}
+                        {displaySchedule?.isSystem && (
+                          <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                            System
+                          </span>
+                        )}
                         {currentAssignment?.customTimes && (
                           <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
                             Custom Times
@@ -204,6 +336,11 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
                       {description && (
                         <div className="text-sm text-gray-600 mt-2">{description}</div>
                       )}
+                      
+                      {/* Display bell sound name */}
+                      <div className="mt-3 text-sm text-gray-700">
+                        <span className="font-medium">Bell Sound:</span> {getBellSoundName(currentAssignment?.bellSoundId || displaySchedule?.bellSoundId)}
+                      </div>
                     </div>
                     <div className="flex gap-2">
                       <button
@@ -243,6 +380,14 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
                       </div>
                     </div>
                   )}
+
+                  {(!displayBellTimes || displayBellTimes.length === 0) && displaySchedule?.isSystem && (
+                    <div className="mt-4 pt-4 border-t border-gray-300">
+                      <div className="text-sm text-gray-600 text-center py-2">
+                        No bells will ring on this day
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -269,16 +414,46 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">Choose a schedule...</option>
-                  {schedules.map((schedule) => (
+                  {availableSchedules.map((schedule) => (
                     <option key={schedule.id} value={schedule.id}>
-                      {schedule.name} {schedule.isDefault ? '(Default)' : ''}
+                      {schedule.name}
+                      {schedule.isDefault ? ' (Default)' : ''}
+                      {schedule.isSystem ? ' (System)' : ''}
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-500 mt-2">
-                  💡 Changing the schedule will load that schedule's default bell times
-                </p>
+                {isNoBellSchedule && (
+                  <p className="text-xs text-gray-600 mt-2">
+                    ℹ️ No bells will ring on this day
+                  </p>
+                )}
+                {!isNoBellSchedule && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    💡 Changing the schedule will load that schedule's default bell times and bell sound
+                  </p>
+                )}
               </div>
+
+              {/* Bell Sound Selection with NEW COMPONENT */}
+              {!isNoBellSchedule && (
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Bell Sound
+                  </label>
+                  
+                  <BellSoundSelector
+                    bellSounds={bellSounds}
+                    selectedBellSoundId={selectedBellSoundId}
+                    onSelect={setSelectedBellSoundId}
+                    playingBellSoundId={playingBellSoundId}
+                    onPlay={handlePlayBellSound}
+                  />
+                  
+                  <p className="text-xs text-gray-500 mt-2">
+                    Override the schedule's default bell sound for this date only.
+                  </p>
+                </div>
+              )}
 
               {/* Description */}
               <div className="mb-6">
@@ -294,8 +469,8 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
                 />
               </div>
 
-              {/* Custom Times */}
-              {selectedScheduleId && customTimes && customTimes.length > 0 && (
+              {/* Custom Times - Only show if NOT "No Bell" schedule */}
+              {!isNoBellSchedule && selectedScheduleId && customTimes && customTimes.length > 0 && (
                 <div className="mb-6">
                   <div className="flex items-center justify-between mb-3">
                     <label className="block text-sm font-medium text-gray-700">

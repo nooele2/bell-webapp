@@ -79,17 +79,25 @@ export const getAssignments = async () => {
   return response.json();
 };
 
-export const createAssignment = async (dates, scheduleId, description = '', customTimes = null) => {
+export const createAssignment = async (dates, scheduleId, description, customTimes = null, bellSoundId = null) => {
   const response = await fetch(`${API_BASE_URL}/assignments`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ dates, scheduleId, description, customTimes }),
+    body: JSON.stringify({ 
+      dates, 
+      scheduleId, 
+      description, 
+      customTimes,
+      bellSoundId // Include bell sound ID
+    }),
   });
+  
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Failed to create assignment' }));
+    const error = await response.json();
     throw new Error(error.error || 'Failed to create assignment');
   }
+  
   return response.json();
 };
 
@@ -98,12 +106,20 @@ export const updateAssignment = async (id, data) => {
     method: 'PUT',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify({
+      date: data.date,
+      scheduleId: data.scheduleId,
+      description: data.description,
+      customTimes: data.customTimes,
+      bellSoundId: data.bellSoundId // Include bell sound ID
+    }),
   });
+  
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Failed to update assignment' }));
+    const error = await response.json();
     throw new Error(error.error || 'Failed to update assignment');
   }
+  
   return response.json();
 };
 

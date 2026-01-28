@@ -97,51 +97,53 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
     setShowBulkModal(true);
   };
 
-  const handleSaveAssignment = async (dates, scheduleId, description, customTimes = null, assignmentId = null) => {
-    console.log('handleSaveAssignment called with:', {
-      dates,
-      scheduleId,
-      description,
-      customTimes,
-      assignmentId
-    });
+  const handleSaveAssignment = async (dates, scheduleId, description, customTimes = null, assignmentId = null, bellSoundId = null) => {
+  console.log('handleSaveAssignment called with:', {
+    dates,
+    scheduleId,
+    description,
+    customTimes,
+    assignmentId,
+    bellSoundId
+  });
 
-    try {
-      if (assignmentId) {
-        // Update existing assignment
-        console.log('Updating assignment:', assignmentId);
-        const updateData = { 
-          date: dates[0], // Single date for updates
-          scheduleId, 
-          description, 
-          customTimes 
-        };
-        console.log('Update data:', updateData);
-        
-        const result = await updateAssignment(assignmentId, updateData);
-        console.log('Update result:', result);
-      } else {
-        // Create new assignment(s)
-        console.log('Creating new assignment(s)');
-        const result = await createAssignment(dates, scheduleId, description, customTimes);
-        console.log('Create result:', result);
-      }
+  try {
+    if (assignmentId) {
+      // Update existing assignment
+      console.log('Updating assignment:', assignmentId);
+      const updateData = { 
+        date: dates[0], // Single date for updates
+        scheduleId, 
+        description, 
+        customTimes,
+        bellSoundId // Include bell sound ID
+      };
+      console.log('Update data:', updateData);
       
-      // Reload data to get fresh state
-      console.log('Reloading data...');
-      await loadData();
-      
-      // Close the modal after successful save
-      console.log('Closing modal');
-      setSelectedDate(null);
-      
-      // Show success message
-      alert(assignmentId ? 'Schedule updated successfully!' : 'Schedule saved successfully!');
-    } catch (error) {
-      console.error('Error saving assignment:', error);
-      alert('Failed to save assignment: ' + error.message);
+      const result = await updateAssignment(assignmentId, updateData);
+      console.log('Update result:', result);
+    } else {
+      // Create new assignment(s)
+      console.log('Creating new assignment(s)');
+      const result = await createAssignment(dates, scheduleId, description, customTimes, bellSoundId);
+      console.log('Create result:', result);
     }
-  };
+    
+    // Reload data to get fresh state
+    console.log('Reloading data...');
+    await loadData();
+    
+    // Close the modal after successful save
+    console.log('Closing modal');
+    setSelectedDate(null);
+    
+    // Show success message
+    alert(assignmentId ? 'Schedule updated successfully!' : 'Schedule saved successfully!');
+  } catch (error) {
+    console.error('Error saving assignment:', error);
+    alert('Failed to save assignment: ' + error.message);
+  }
+};
 
   const handleBulkSave = async (scheduleId, description, dates = null) => {
     try {
@@ -193,7 +195,12 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
       />
 
       <div className="max-w-7xl mx-auto p-6">
-        <StatusSummary schedules={schedules} dateAssignments={dateAssignments} />
+        <StatusSummary 
+  schedules={schedules} 
+  dateAssignments={dateAssignments} 
+  onUpdateAssignment={updateAssignment}
+  onRefresh={loadData}
+/>
 
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
@@ -219,30 +226,6 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
                 <List size={18} /> List
               </button>
             </div>
-
-            {viewMode === 'list' && (
-              <div className="flex items-center gap-3">
-                <Filter size={18} className="text-gray-600" />
-                <select
-                  value={filterMode}
-                  onChange={(e) => setFilterMode(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                >
-                  <option value="">All Modes ({dateAssignments.length})</option>
-                  {modes.map(mode => {
-                    const count = dateAssignments.filter(a => {
-                      const schedule = schedules.find(s => s.id === a.scheduleId);
-                      return schedule && schedule.mode === mode;
-                    }).length;
-                    return (
-                      <option key={mode} value={mode}>
-                        {mode} ({count})
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-            )}
           </div>
 
           <div className="flex items-center gap-3">

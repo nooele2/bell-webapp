@@ -1,10 +1,11 @@
 [
   {
+    "bellSoundId": "1768897040869",
     "color": {
-      "name": "Pink",
-      "value": "#fce7f3",
-      "border": "#f9a8d4",
-      "text": "#9f1239"
+      "name": "Lime",
+      "value": "#ecfccb",
+      "border": "#84cc16",
+      "text": "#365314"
     },
     "id": "1767932229426",
     "isDefault": false,
@@ -14,14 +15,35 @@
       {
         "description": "B",
         "time": "08:00"
+      },
+      {
+        "description": "q",
+        "time": "09:57"
+      },
+      {
+        "description": "w",
+        "time": "09:57"
+      },
+      {
+        "description": "d",
+        "time": "09:59"
+      },
+      {
+        "description": "f",
+        "time": "09:00"
+      },
+      {
+        "description": "y",
+        "time": "09:04"
       }
     ]
   },
   {
+    "bellSoundId": null,
     "color": {
-      "name": "Custom",
+      "name": "Yellow",
       "value": "#fef3c7",
-      "border": "#fef3c7",
+      "border": "#fbbf24",
       "text": "#854d0e"
     },
     "id": "1768807396803",
@@ -67,7 +89,8 @@
         "time": "03:28",
         "description": "bud"
       }
-    ]
+    ],
+    "bellSoundId": null
   },
   {
     "id": "1768812055890",
@@ -85,7 +108,8 @@
         "time": "15:42",
         "description": "gp"
       }
-    ]
+    ],
+    "bellSoundId": null
   },
   {
     "id": "1768883864793",
@@ -103,23 +127,44 @@
         "time": "11:37",
         "description": "Lunch"
       }
+    ],
+    "bellSoundId": null
+  },
+  {
+    "bellSoundId": null,
+    "color": {
+      "name": "Purple",
+      "value": "#e9d5ff",
+      "border": "#a855f7",
+      "text": "#5b21b6"
+    },
+    "id": "1769484562323",
+    "isDefault": false,
+    "mode": "keke",
+    "name": "keke",
+    "times": [
+      {
+        "description": "gg",
+        "time": "10:30"
+      }
     ]
   },
   {
-    "id": "1768898557720",
-    "name": "no ball",
-    "mode": "no ball",
-    "isDefault": false,
+    "bellSoundId": null,
     "color": {
-      "name": "Lime",
-      "value": "#ecfccb",
-      "border": "#a3e635",
-      "text": "#365314"
+      "name": "Orange",
+      "value": "#fed7aa",
+      "border": "#f97316",
+      "text": "#7c2d12"
     },
+    "id": "1769485253845",
+    "isDefault": false,
+    "mode": "ff",
+    "name": "ff",
     "times": [
       {
-        "time": "17:44",
-        "description": "lsdf"
+        "description": "gg",
+        "time": "10:41"
       }
     ]
   }

@@ -114,6 +114,7 @@ def parse_ringtimes():
                         'mode': mode_name,
                         'original_code': mode_part,
                         'color': default_color,
+                        'bellSoundId': None,  # Initialize bell sound field
                         'times': []
                     }
                     schedule_id += 1
@@ -195,6 +196,7 @@ def init_data_files():
                     "mode": "Normal",
                     "isDefault": True,
                     "color": DEFAULT_COLORS["Normal"],
+                    "bellSoundId": None,
                     "times": [
                         {"time": "09:00", "description": "1st period"},
                         {"time": "10:00", "description": "2nd period"},
@@ -239,12 +241,16 @@ def load_schedules():
         with open(SCHEDULES_FILE, 'r') as f:
             schedules = json.load(f)
             
-        # Ensure all schedules have a color field
+        # Ensure all schedules have required fields
         for schedule in schedules:
+            # Ensure color field exists
             if 'color' not in schedule:
-                # Assign default color based on mode
                 mode = schedule.get('mode', 'Normal')
                 schedule['color'] = DEFAULT_COLORS.get(mode, DEFAULT_COLORS["Normal"])
+            
+            # Ensure bellSoundId field exists (can be None)
+            if 'bellSoundId' not in schedule:
+                schedule['bellSoundId'] = None
         
         return schedules
     except:
@@ -337,7 +343,7 @@ def check_auth():
     return jsonify({'authenticated': False}), 401
 
 # ============================================================================
-# SCHEDULES API
+# SCHEDULES API (UPDATED WITH BELL SOUND SUPPORT)
 # ============================================================================
 
 @app.route('/api/schedules', methods=['GET'])
@@ -366,6 +372,17 @@ def create_schedule():
         mode = new_schedule.get('mode', 'Normal')
         new_schedule['color'] = DEFAULT_COLORS.get(mode, DEFAULT_COLORS["Normal"])
     
+    # Handle bellSoundId - can be None or a valid sound ID
+    bell_sound_id = new_schedule.get('bellSoundId')
+    if bell_sound_id:
+        # Validate bell sound exists
+        bell_sounds = load_bell_sounds_meta()
+        if not any(sound['id'] == bell_sound_id for sound in bell_sounds):
+            return jsonify({'error': 'Invalid bell sound ID'}), 400
+        new_schedule['bellSoundId'] = bell_sound_id
+    else:
+        new_schedule['bellSoundId'] = None
+    
     schedules.append(new_schedule)
     
     if save_schedules(schedules):
@@ -380,12 +397,25 @@ def update_schedule(schedule_id):
     
     for i, schedule in enumerate(schedules):
         if schedule['id'] == schedule_id:
+            # Preserve ID
             schedules[i] = {**updated_data, 'id': schedule_id}
             
             # Ensure color is preserved or set
             if 'color' not in schedules[i]:
                 mode = schedules[i].get('mode', 'Normal')
                 schedules[i]['color'] = DEFAULT_COLORS.get(mode, DEFAULT_COLORS["Normal"])
+            
+            # Handle bellSoundId update
+            bell_sound_id = updated_data.get('bellSoundId')
+            if bell_sound_id:
+                # Validate bell sound exists
+                bell_sounds = load_bell_sounds_meta()
+                if not any(sound['id'] == bell_sound_id for sound in bell_sounds):
+                    return jsonify({'error': 'Invalid bell sound ID'}), 400
+                schedules[i]['bellSoundId'] = bell_sound_id
+            else:
+                # Explicitly set to None if not provided or empty
+                schedules[i]['bellSoundId'] = None
             
             if save_schedules(schedules):
                 return jsonify(schedules[i])
@@ -428,9 +458,16 @@ def create_assignment():
     schedule_id = data.get('scheduleId')
     description = data.get('description', '')
     custom_times = data.get('customTimes')
+    bell_sound_id = data.get('bellSoundId')
     
     if not dates or not schedule_id:
         return jsonify({'error': 'Dates and scheduleId are required'}), 400
+    
+    # Validate bell sound if provided
+    if bell_sound_id:
+        bell_sounds = load_bell_sounds_meta()
+        if not any(sound['id'] == bell_sound_id for sound in bell_sounds):
+            return jsonify({'error': 'Invalid bell sound ID'}), 400
     
     created_assignments = []
     for date in dates:
@@ -444,6 +481,10 @@ def create_assignment():
         # Only add customTimes if provided
         if custom_times:
             new_assignment['customTimes'] = custom_times
+        
+        # Add bellSoundId if provided (can override schedule's default)
+        if bell_sound_id is not None:
+            new_assignment['bellSoundId'] = bell_sound_id
             
         assignments.append(new_assignment)
         created_assignments.append(new_assignment)
@@ -476,6 +517,21 @@ def update_assignment(assignment_id):
                 # If customTimes is explicitly None, remove it from the assignment
                 elif 'customTimes' in assignments[i]:
                     del assignments[i]['customTimes']
+            
+            # Handle bellSoundId - can override schedule's default
+            if 'bellSoundId' in data:
+                bell_sound_id = data['bellSoundId']
+                
+                # Validate bell sound if provided and not null
+                if bell_sound_id:
+                    bell_sounds = load_bell_sounds_meta()
+                    if not any(sound['id'] == bell_sound_id for sound in bell_sounds):
+                        return jsonify({'error': 'Invalid bell sound ID'}), 400
+                    assignments[i]['bellSoundId'] = bell_sound_id
+                else:
+                    # If null, remove the field to use schedule default
+                    if 'bellSoundId' in assignments[i]:
+                        del assignments[i]['bellSoundId']
             
             if save_assignments(assignments):
                 return jsonify(assignments[i])
@@ -658,6 +714,30 @@ def delete_bell_sound(sound_id):
         
         if not sound:
             return jsonify({'error': 'Sound not found'}), 404
+        
+        # Update any schedules using this sound to null
+        schedules = load_schedules()
+        schedules_updated = False
+        for schedule in schedules:
+            if schedule.get('bellSoundId') == sound_id:
+                schedule['bellSoundId'] = None
+                schedules_updated = True
+        
+        if schedules_updated:
+            save_schedules(schedules)
+            print(f"Updated schedules to remove bell sound reference: {sound_id}")
+        
+        # Update any assignments using this sound to remove the override
+        assignments = load_assignments()
+        assignments_updated = False
+        for assignment in assignments:
+            if assignment.get('bellSoundId') == sound_id:
+                del assignment['bellSoundId']
+                assignments_updated = True
+        
+        if assignments_updated:
+            save_assignments(assignments)
+            print(f"Updated assignments to remove bell sound reference: {sound_id}")
         
         # Delete file
         file_path = os.path.join(BELL_SOUNDS_DIR, sound['savedFileName'])
