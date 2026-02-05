@@ -39,7 +39,8 @@ export const isToday = (date) => {
 };
 
 export const isWeekend = (date) => {
-  const dayOfWeek = new Date(date).getDay();
+  if (!date) return false;
+  const dayOfWeek = date.getDay(); // FIXED: Don't wrap in new Date()
   return dayOfWeek === 0 || dayOfWeek === 6; // Sunday = 0, Saturday = 6
 };
 

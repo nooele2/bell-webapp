@@ -1,20 +1,14 @@
 import React, { useState } from 'react';
 import { formatDate, parseDate } from '../utils/dateUtils';
 import { Filter } from 'lucide-react';
+import { SYSTEM_NO_BELL_SCHEDULE } from '../constants';
+import { getScheduleColorById, getScheduleName } from '../utils/scheduleUtils';
 
 function ListView({ schedules, dateAssignments, onDateClick, isSelectionMode, selectedDates }) {
   const [filterScheduleId, setFilterScheduleId] = useState('all');
 
-  // Include system "No Bell" schedule
-  const SYSTEM_NO_BELL_SCHEDULE = {
-    id: 'system-no-bell',
-    name: 'No Bell',
-    isSystem: true
-  };
-
   const allSchedules = [SYSTEM_NO_BELL_SCHEDULE, ...schedules];
 
-  // Calculate count for each schedule
   const getScheduleCount = (scheduleId) => {
     if (scheduleId === 'all') {
       return dateAssignments.length;
@@ -22,12 +16,10 @@ function ListView({ schedules, dateAssignments, onDateClick, isSelectionMode, se
     return dateAssignments.filter(a => a.scheduleId === scheduleId).length;
   };
 
-  // Filter assignments based on selected schedule
   const filteredAssignments = filterScheduleId === 'all'
     ? dateAssignments
     : dateAssignments.filter(a => a.scheduleId === filterScheduleId);
 
-  // Group assignments by date - keep only the first assignment per date
   const dateMap = new Map();
   filteredAssignments.forEach(assignment => {
     if (!dateMap.has(assignment.date)) {
@@ -41,36 +33,6 @@ function ListView({ schedules, dateAssignments, onDateClick, isSelectionMode, se
   );
 
   const today = formatDate(new Date());
-
-  const getScheduleColor = (scheduleId) => {
-    // Check if it's the system "No Bell" schedule
-    if (scheduleId === 'system-no-bell') {
-      return { value: '#fee2e2', border: '#ef4444', text: '#991b1b' }; // Light red background, strong red border
-    }
-    
-    const schedule = schedules.find(s => s.id === scheduleId);
-    
-    if (!schedule) {
-      // Default to gray if schedule not found
-      return { value: '#f3f4f6', border: '#6b7280', text: '#374151' };
-    }
-    
-    if (!schedule.color) {
-      // Default to green if color not set
-      return { value: '#d1fae5', border: '#10b981', text: '#065f46' };
-    }
-    
-    // Return the schedule's color (works for both preset and custom colors)
-    return schedule.color;
-  };
-
-  const getScheduleName = (scheduleId) => {
-    if (scheduleId === 'system-no-bell') {
-      return 'No Bell';
-    }
-    const schedule = schedules.find(s => s.id === scheduleId);
-    return schedule?.name || 'Unknown';
-  };
 
   if (isSelectionMode) {
     return (
@@ -87,7 +49,6 @@ function ListView({ schedules, dateAssignments, onDateClick, isSelectionMode, se
     );
   }
 
-  // Group assignments by month
   const groupedByMonth = sortedAssignments.reduce((groups, assignment) => {
     const date = parseDate(assignment.date);
     const monthYear = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
@@ -101,7 +62,6 @@ function ListView({ schedules, dateAssignments, onDateClick, isSelectionMode, se
 
   return (
     <>
-      {/* Filter Dropdown - Separate card above the list */}
       <div className="mb-4 p-4 bg-white rounded-lg shadow-md border border-gray-200">
         <div className="flex items-center gap-3">
           <Filter size={18} className="text-gray-600" />
@@ -113,7 +73,7 @@ function ListView({ schedules, dateAssignments, onDateClick, isSelectionMode, se
             <option value="all">All Schedules ({getScheduleCount('all')})</option>
             {allSchedules.map((schedule) => {
               const count = getScheduleCount(schedule.id);
-              if (count === 0) return null; // Don't show schedules with 0 assignments
+              if (count === 0) return null;
               return (
                 <option key={schedule.id} value={schedule.id}>
                   {schedule.name} ({count})
@@ -124,7 +84,6 @@ function ListView({ schedules, dateAssignments, onDateClick, isSelectionMode, se
         </div>
       </div>
 
-      {/* List Content */}
       <div className="bg-white rounded-lg shadow-md">
         {sortedAssignments.length === 0 ? (
           <div className="p-12 text-center text-gray-500">
@@ -145,20 +104,17 @@ function ListView({ schedules, dateAssignments, onDateClick, isSelectionMode, se
           <div>
             {Object.entries(groupedByMonth).map(([monthYear, assignments]) => (
               <div key={monthYear}>
-                {/* Month Header */}
                 <div className="bg-gray-100 px-6 py-3 border-b border-gray-300 sticky top-0 z-10">
                   <h3 className="text-lg font-bold text-gray-900">{monthYear}</h3>
                 </div>
                 
-                {/* Assignments for this month */}
                 <div className="divide-y divide-gray-200">
                   {assignments.map(assignment => {
-                    const schedule = schedules.find(s => s.id === assignment.scheduleId);
-                    const isNoBell = assignment.scheduleId === 'system-no-bell';
-                    const scheduleName = getScheduleName(assignment.scheduleId);
+                    const scheduleName = getScheduleName(assignment.scheduleId, schedules);
                     const date = parseDate(assignment.date);
                     const isTodayDate = assignment.date === today;
-                    const schedColor = getScheduleColor(assignment.scheduleId);
+                    const schedColor = getScheduleColorById(assignment.scheduleId, schedules);
+                    const isNoBell = assignment.scheduleId === 'system-no-bell';
                     
                     return (
                       <div
@@ -184,7 +140,6 @@ function ListView({ schedules, dateAssignments, onDateClick, isSelectionMode, se
                               )}
                             </div>
                             <div className="flex items-center gap-2 mt-2">
-                              {/* Only small tag */}
                               <span 
                                 className="text-xs px-2 py-1 rounded font-medium"
                                 style={{

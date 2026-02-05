@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, List, Filter, CalendarPlus, Settings } from 'lucide-react';
+import { Calendar, List, CalendarPlus, Settings } from 'lucide-react';
 import Header from '../components/Header';
 import StatusSummary from '../components/StatusSummary';
 import CalendarView from '../components/CalendarView';
@@ -13,7 +13,6 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
   const [schedules, setSchedules] = useState([]);
   const [dateAssignments, setDateAssignments] = useState([]);
   const [viewMode, setViewMode] = useState('calendar');
-  const [filterMode, setFilterMode] = useState('');
   const [selectedDate, setSelectedDate] = useState(null);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedDates, setSelectedDates] = useState([]);
@@ -43,10 +42,8 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
 
   const handleDateClick = (date) => {
     if (isSelectionMode) {
-      // In selection mode, toggle date selection
       const dateStr = formatDateString(date);
       
-      // Check if date already has a schedule
       const hasSchedule = dateAssignments.some(a => a.date === dateStr);
       if (hasSchedule) {
         alert('This date already has a schedule assigned. Please delete the existing schedule first if you want to change it.');
@@ -61,7 +58,6 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
         }
       });
     } else {
-      // Normal mode, open single date modal
       setSelectedDate(date);
     }
   };
@@ -75,11 +71,9 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
 
   const handleSetScheduleMode = () => {
     if (viewMode === 'calendar') {
-      // Calendar view: enter selection mode
       setIsSelectionMode(true);
       setSelectedDates([]);
     } else {
-      // List view: show modal directly
       setShowBulkModal(true);
     }
   };
@@ -98,52 +92,31 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
   };
 
   const handleSaveAssignment = async (dates, scheduleId, description, customTimes = null, assignmentId = null, bellSoundId = null) => {
-  console.log('handleSaveAssignment called with:', {
-    dates,
-    scheduleId,
-    description,
-    customTimes,
-    assignmentId,
-    bellSoundId
-  });
-
-  try {
-    if (assignmentId) {
-      // Update existing assignment
-      console.log('Updating assignment:', assignmentId);
-      const updateData = { 
-        date: dates[0], // Single date for updates
-        scheduleId, 
-        description, 
-        customTimes,
-        bellSoundId // Include bell sound ID
-      };
-      console.log('Update data:', updateData);
+    try {
+      if (assignmentId) {
+        const updateData = { 
+          date: dates[0],
+          scheduleId, 
+          description, 
+          customTimes,
+          bellSoundId
+        };
+        
+        await updateAssignment(assignmentId, updateData);
+      } else {
+        await createAssignment(dates, scheduleId, description, customTimes, bellSoundId);
+      }
       
-      const result = await updateAssignment(assignmentId, updateData);
-      console.log('Update result:', result);
-    } else {
-      // Create new assignment(s)
-      console.log('Creating new assignment(s)');
-      const result = await createAssignment(dates, scheduleId, description, customTimes, bellSoundId);
-      console.log('Create result:', result);
+      await loadData();
+      
+      setSelectedDate(null);
+      
+      alert(assignmentId ? 'Schedule updated successfully!' : 'Schedule saved successfully!');
+    } catch (error) {
+      console.error('Error saving assignment:', error);
+      alert('Failed to save assignment: ' + error.message);
     }
-    
-    // Reload data to get fresh state
-    console.log('Reloading data...');
-    await loadData();
-    
-    // Close the modal after successful save
-    console.log('Closing modal');
-    setSelectedDate(null);
-    
-    // Show success message
-    alert(assignmentId ? 'Schedule updated successfully!' : 'Schedule saved successfully!');
-  } catch (error) {
-    console.error('Error saving assignment:', error);
-    alert('Failed to save assignment: ' + error.message);
-  }
-};
+  };
 
   const handleBulkSave = async (scheduleId, description, dates = null) => {
     try {
@@ -171,8 +144,6 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
     }
   };
 
-  const modes = [...new Set(schedules.map(s => s.mode))];
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -196,11 +167,11 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
 
       <div className="max-w-7xl mx-auto p-6">
         <StatusSummary 
-  schedules={schedules} 
-  dateAssignments={dateAssignments} 
-  onUpdateAssignment={updateAssignment}
-  onRefresh={loadData}
-/>
+          schedules={schedules} 
+          dateAssignments={dateAssignments} 
+          onUpdateAssignment={updateAssignment}
+          onRefresh={loadData}
+        />
 
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
@@ -267,7 +238,7 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
               </>
             )}
           </div>
-          </div>
+        </div>
 
         {viewMode === 'calendar' ? (
           <CalendarView
@@ -281,7 +252,6 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
           <ListView
             schedules={schedules}
             dateAssignments={dateAssignments}
-            filterMode={filterMode}
             onDateClick={handleDateClick}
             isSelectionMode={isSelectionMode}
             selectedDates={selectedDates}

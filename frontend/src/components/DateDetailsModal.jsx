@@ -1,75 +1,59 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Trash2, Edit2, Save, Plus, Clock } from 'lucide-react';
-import { formatDate, formatDisplayDate } from '../utils/dateUtils';
-import { getBellSounds, getBellSoundUrl } from '../services/bellSoundsApi';
+import { formatDate, formatDisplayDate, isWeekend } from '../utils/dateUtils';
+import { getBellSounds, getBellSoundUrl } from '../services/api';
 import { BellSoundSelector } from '../components/Bellsoundselector';
-
-// System "No Bell" schedule
-const SYSTEM_NO_BELL_SCHEDULE = {
-  id: 'system-no-bell',
-  name: 'No Bell',
-  mode: 'No Bell',
-  isDefault: false,
-  isSystem: true,
-  color: { name: 'Gray', value: '#f3f4f6', text: '#374151' },
-  times: []
-};
+import { SYSTEM_NO_BELL_SCHEDULE } from '../constants';
+import { useAudioPlayer } from '../hooks/useAudioPlayer';
 
 function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, onDelete }) {
   const dateStr = formatDate(date);
   const assignments = dateAssignments.filter(a => a.date === dateStr);
-  const currentAssignment = assignments[0]; // Only one assignment per date
+  const currentAssignment = assignments[0];
   
-  // Include system "No Bell" schedule in the available schedules
   const availableSchedules = [SYSTEM_NO_BELL_SCHEDULE, ...schedules];
   
-  // Find default schedule
   const defaultSchedule = schedules.find(s => s.isDefault === true);
+  const isWeekendDay = isWeekend(date);
   
-  // Determine if we're using default schedule
-  const isUsingDefault = !currentAssignment && defaultSchedule;
+  // FIXED: For weekends without assignment, use No Bell. For weekdays, use default schedule
+  const isUsingDefault = !currentAssignment && (isWeekendDay || defaultSchedule);
   
   const [isEditing, setIsEditing] = useState(!currentAssignment && !isUsingDefault);
   const [selectedScheduleId, setSelectedScheduleId] = useState(
-    currentAssignment?.scheduleId || defaultSchedule?.id || ''
+    currentAssignment?.scheduleId || (isWeekendDay ? 'system-no-bell' : defaultSchedule?.id) || ''
   );
   const [description, setDescription] = useState(currentAssignment?.description || '');
   const [customTimes, setCustomTimes] = useState(null);
   const [useCustomTimes, setUseCustomTimes] = useState(false);
   const [bellSounds, setBellSounds] = useState([]);
   const [selectedBellSoundId, setSelectedBellSoundId] = useState(null);
-  const [playingBellSoundId, setPlayingBellSoundId] = useState(null);
   
-  const audioRef = useRef(null);
+  const { playingId: playingBellSoundId, togglePlay: handlePlayBellSound, stopAudio } = useAudioPlayer();
 
-  // Get the selected schedule (check both system and regular schedules)
   const selectedSchedule = availableSchedules.find(s => s.id === selectedScheduleId);
   
-  // Get the display schedule (either assignment schedule or default)
+  // FIXED: Display schedule logic for weekends
   const displaySchedule = currentAssignment 
     ? availableSchedules.find(s => s.id === currentAssignment.scheduleId)
-    : defaultSchedule;
+    : isWeekendDay 
+      ? SYSTEM_NO_BELL_SCHEDULE
+      : defaultSchedule;
 
-  // Get bell times to display
   const displayBellTimes = currentAssignment?.customTimes 
     || (currentAssignment 
       ? availableSchedules.find(s => s.id === currentAssignment.scheduleId)?.times
-      : defaultSchedule?.times);
+      : (isWeekendDay ? null : defaultSchedule?.times));
 
-  // Load bell sounds on mount
   useEffect(() => {
     loadBellSounds();
   }, []);
 
-  // Cleanup audio on unmount
   useEffect(() => {
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
+      stopAudio();
     };
-  }, []);
+  }, [stopAudio]);
 
   const loadBellSounds = async () => {
     try {
@@ -80,7 +64,6 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
     }
   };
 
-  // Initialize custom times and bell sound from current assignment or selected schedule
   useEffect(() => {
     if (currentAssignment?.customTimes) {
       setCustomTimes(JSON.parse(JSON.stringify(currentAssignment.customTimes)));
@@ -93,7 +76,6 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
       setUseCustomTimes(false);
     }
 
-    // Set bell sound - priority: assignment override > schedule default
     if (currentAssignment?.bellSoundId !== undefined) {
       setSelectedBellSoundId(currentAssignment.bellSoundId);
     } else if (selectedSchedule?.bellSoundId) {
@@ -103,62 +85,21 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
     }
   }, [currentAssignment, selectedSchedule]);
 
-  const handlePlayBellSound = (soundId) => {
-    if (playingBellSoundId === soundId && audioRef.current) {
-      // Stop playing
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      audioRef.current = null;
-      setPlayingBellSoundId(null);
-      return;
-    }
-
-    // Stop any currently playing audio
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
-
-    try {
-      const audio = new Audio(getBellSoundUrl(soundId));
-      audioRef.current = audio;
-      
-      audio.play();
-      setPlayingBellSoundId(soundId);
-      
-      audio.onended = () => {
-        setPlayingBellSoundId(null);
-        audioRef.current = null;
-      };
-
-      audio.onerror = () => {
-        console.error('Error playing audio');
-        setPlayingBellSoundId(null);
-        audioRef.current = null;
-        alert('Failed to play audio');
-      };
-    } catch (error) {
-      console.error('Playback error:', error);
-      alert('Failed to play audio');
-      setPlayingBellSoundId(null);
-      audioRef.current = null;
-    }
-  };
-
   const handleSave = async () => {
     if (!selectedScheduleId) {
       alert('Please select a schedule');
       return;
     }
 
-    // Stop any playing audio
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-      setPlayingBellSoundId(null);
-    }
+    stopAudio();
 
     const isNoBellSchedule = selectedScheduleId === 'system-no-bell';
+
+    // REQUIRED: Bell sound must be selected for non-No Bell schedules
+    if (!isNoBellSchedule && !selectedBellSoundId) {
+      alert('Please select a bell sound for this schedule');
+      return;
+    }
 
     if (!isNoBellSchedule && useCustomTimes && customTimes) {
       const hasEmptyFields = customTimes.some(t => !t.time || !t.description.trim());
@@ -196,12 +137,7 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
 
   const handleDelete = async () => {
     if (window.confirm('Are you sure you want to remove this schedule assignment? The date will revert to using the default schedule.')) {
-      // Stop any playing audio
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-        setPlayingBellSoundId(null);
-      }
+      stopAudio();
       
       try {
         await onDelete(currentAssignment.id);
@@ -265,9 +201,9 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
   };
 
   const getBellSoundName = (bellSoundId) => {
-    if (!bellSoundId) return 'Default Bell';
+    if (!bellSoundId) return 'None selected';
     const sound = bellSounds.find(s => s.id === bellSoundId);
-    return sound ? sound.name : 'Default Bell';
+    return sound ? sound.name : 'Unknown';
   };
 
   const isNoBellSchedule = selectedScheduleId === 'system-no-bell';
@@ -284,18 +220,16 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
               {isEditing 
                 ? 'Edit schedule for this date' 
                 : isUsingDefault 
-                  ? 'Using default schedule (click Edit to assign a specific schedule)'
+                  ? isWeekendDay 
+                    ? 'Using No Bell schedule for weekend (click Edit to assign a specific schedule)'
+                    : 'Using default schedule (click Edit to assign a specific schedule)'
                   : 'Manage schedule for this date'
               }
             </p>
           </div>
           <button
             onClick={() => {
-              if (audioRef.current) {
-                audioRef.current.pause();
-                audioRef.current = null;
-                setPlayingBellSoundId(null);
-              }
+              stopAudio();
               onClose();
             }}
             className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
@@ -306,20 +240,28 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
 
         <div className="p-8">
           {!isEditing && (currentAssignment || isUsingDefault) ? (
-            /* View Mode */
             <div>
               <div className="mb-6">
                 <h3 className="text-lg font-semibold mb-4 text-gray-900">
-                  {isUsingDefault ? 'Default Schedule' : 'Current Schedule'}
+                  {isUsingDefault 
+                    ? isWeekendDay 
+                      ? 'Weekend - No Bell Schedule' 
+                      : 'Default Schedule' 
+                    : 'Current Schedule'}
                 </h3>
                 <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
                       <div className="font-medium text-gray-900 text-lg">
                         {displaySchedule?.name}
-                        {isUsingDefault && (
+                        {isUsingDefault && isWeekendDay && (
+                          <span className="ml-2 text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded-full">
+                            Weekend Default
+                          </span>
+                        )}
+                        {isUsingDefault && !isWeekendDay && (
                           <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">
-                            Default
+                            Weekday Default
                           </span>
                         )}
                         {displaySchedule?.isSystem && (
@@ -337,10 +279,11 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
                         <div className="text-sm text-gray-600 mt-2">{description}</div>
                       )}
                       
-                      {/* Display bell sound name */}
-                      <div className="mt-3 text-sm text-gray-700">
-                        <span className="font-medium">Bell Sound:</span> {getBellSoundName(currentAssignment?.bellSoundId || displaySchedule?.bellSoundId)}
-                      </div>
+                      {!isWeekendDay && !displaySchedule?.isSystem && (
+                        <div className="mt-3 text-sm text-gray-700">
+                          <span className="font-medium">Bell Sound:</span> {getBellSoundName(currentAssignment?.bellSoundId || displaySchedule?.bellSoundId)}
+                        </div>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <button
@@ -362,7 +305,6 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
                     </div>
                   </div>
 
-                  {/* Display Times */}
                   {displayBellTimes && displayBellTimes.length > 0 && (
                     <div className="mt-4 pt-4 border-t border-gray-300">
                       <div className="text-sm font-medium text-gray-700 mb-3">
@@ -401,9 +343,7 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
               </div>
             </div>
           ) : (
-            /* Edit Mode */
             <div>
-              {/* Schedule Selection */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Select Schedule *
@@ -427,6 +367,11 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
                     ℹ️ No bells will ring on this day
                   </p>
                 )}
+                {isWeekendDay && !isNoBellSchedule && (
+                  <p className="text-xs text-yellow-600 mt-2">
+                    ⚠️ This is a weekend day. Assigning a bell schedule will override the default No Bell setting.
+                  </p>
+                )}
                 {!isNoBellSchedule && (
                   <p className="text-xs text-gray-500 mt-2">
                     💡 Changing the schedule will load that schedule's default bell times and bell sound
@@ -434,11 +379,10 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
                 )}
               </div>
 
-              {/* Bell Sound Selection with NEW COMPONENT */}
               {!isNoBellSchedule && (
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Bell Sound
+                    Bell Sound *
                   </label>
                   
                   <BellSoundSelector
@@ -450,12 +394,11 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
                   />
                   
                   <p className="text-xs text-gray-500 mt-2">
-                    Override the schedule's default bell sound for this date only.
+                    Select which bell sound to use for this schedule.
                   </p>
                 </div>
               )}
 
-              {/* Description */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Description (optional)
@@ -469,7 +412,6 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
                 />
               </div>
 
-              {/* Custom Times - Only show if NOT "No Bell" schedule */}
               {!isNoBellSchedule && selectedScheduleId && customTimes && customTimes.length > 0 && (
                 <div className="mb-6">
                   <div className="flex items-center justify-between mb-3">
@@ -534,11 +476,10 @@ function DateDetailsModal({ date, schedules, dateAssignments, onClose, onSave, o
                 </div>
               )}
 
-              {/* Action Buttons */}
               <div className="flex gap-3">
                 <button
                   onClick={handleSave}
-                  disabled={!selectedScheduleId}
+                  disabled={!selectedScheduleId || (!isNoBellSchedule && !selectedBellSoundId)}
                   className="flex-1 bg-blue-600 text-white py-3 px-6 rounded-xl hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium text-lg flex items-center justify-center gap-2"
                 >
                   <Save size={20} />

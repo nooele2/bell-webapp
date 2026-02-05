@@ -2,10 +2,10 @@
   {
     "bellSoundId": "1768897040869",
     "color": {
-      "name": "Lime",
-      "value": "#ecfccb",
-      "border": "#84cc16",
-      "text": "#365314"
+      "name": "Purple",
+      "value": "#e9d5ff",
+      "border": "#a855f7",
+      "text": "#5b21b6"
     },
     "id": "1767932229426",
     "isDefault": false,
@@ -33,7 +33,7 @@
         "time": "09:00"
       },
       {
-        "description": "y",
+        "description": "",
         "time": "09:04"
       }
     ]
@@ -41,10 +41,10 @@
   {
     "bellSoundId": null,
     "color": {
-      "name": "Yellow",
-      "value": "#fef3c7",
       "border": "#fbbf24",
-      "text": "#854d0e"
+      "name": "Yellow",
+      "text": "#854d0e",
+      "value": "#fef3c7"
     },
     "id": "1768807396803",
     "isDefault": true,
@@ -58,11 +58,12 @@
     ]
   },
   {
+    "bellSoundId": "1768897040869",
     "color": {
-      "border": "#f9a8d4",
-      "name": "Pink",
-      "text": "#9f1239",
-      "value": "#fce7f3"
+      "border": "#ef4444",
+      "name": "Red",
+      "text": "#7f1d1d",
+      "value": "#fecaca"
     },
     "id": "1768812033294",
     "isDefault": false,
@@ -74,69 +75,68 @@
         "time": "15:40"
       },
       {
-        "time": "15:29",
-        "description": "bud"
+        "description": "bud",
+        "time": "15:29"
       },
       {
-        "time": "15:32",
-        "description": "bud"
+        "description": "bud",
+        "time": "15:32"
       },
       {
-        "time": "15:31",
-        "description": "bud"
+        "description": "bud",
+        "time": "15:31"
       },
       {
-        "time": "03:28",
-        "description": "bud"
+        "description": "bud",
+        "time": "03:28"
       }
-    ],
-    "bellSoundId": null
-  },
-  {
-    "id": "1768812055890",
-    "name": "happy",
-    "mode": "happy",
-    "isDefault": false,
-    "color": {
-      "name": "Indigo",
-      "value": "#e0e7ff",
-      "border": "#818cf8",
-      "text": "#312e81"
-    },
-    "times": [
-      {
-        "time": "15:42",
-        "description": "gp"
-      }
-    ],
-    "bellSoundId": null
-  },
-  {
-    "id": "1768883864793",
-    "name": "Sports Day",
-    "mode": "Sports Day",
-    "isDefault": false,
-    "color": {
-      "name": "Green",
-      "value": "#d1fae5",
-      "border": "#34d399",
-      "text": "#065f46"
-    },
-    "times": [
-      {
-        "time": "11:37",
-        "description": "Lunch"
-      }
-    ],
-    "bellSoundId": null
+    ]
   },
   {
     "bellSoundId": null,
     "color": {
-      "name": "Purple",
-      "value": "#e9d5ff",
+      "border": "#818cf8",
+      "name": "Indigo",
+      "text": "#312e81",
+      "value": "#e0e7ff"
+    },
+    "id": "1768812055890",
+    "isDefault": false,
+    "mode": "happy",
+    "name": "happy",
+    "times": [
+      {
+        "description": "gp",
+        "time": "15:42"
+      }
+    ]
+  },
+  {
+    "bellSoundId": null,
+    "color": {
+      "border": "#34d399",
+      "name": "Green",
+      "text": "#065f46",
+      "value": "#d1fae5"
+    },
+    "id": "1768883864793",
+    "isDefault": false,
+    "mode": "Sports Day",
+    "name": "Sports Day",
+    "times": [
+      {
+        "description": "Lunch",
+        "time": "11:37"
+      }
+    ]
+  },
+  {
+    "bellSoundId": null,
+    "color": {
       "border": "#a855f7",
-      "text": "#5b21b6"
+      "name": "Purple",
+      "text": "#5b21b6",
+      "value": "#e9d5ff"
     },
     "id": "1769484562323",
     "isDefault": false,
@@ -152,10 +152,10 @@
   {
     "bellSoundId": null,
     "color": {
-      "name": "Orange",
-      "value": "#fed7aa",
       "border": "#f97316",
-      "text": "#7c2d12"
+      "name": "Orange",
+      "text": "#7c2d12",
+      "value": "#fed7aa"
     },
     "id": "1769485253845",
     "isDefault": false,

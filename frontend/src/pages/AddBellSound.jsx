@@ -1,32 +1,23 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Upload, Play, Pause, Trash2, Volume2, Search, X, Edit2, Check } from 'lucide-react';
-import { getBellSounds, uploadBellSound, getBellSoundUrl, updateBellSound, deleteBellSound } from '../services/bellSoundsApi';
+import { getBellSounds, uploadBellSound, getBellSoundUrl, updateBellSound, deleteBellSound } from '../services/api';
+import { useAudioPlayer } from '../hooks/useAudioPlayer';
+import { AUDIO_UPLOAD_CONSTRAINTS } from '../constants';
+import { formatFileSize } from '../utils/scheduleUtils';
 
 function AddBellSound({ onBack }) {
   const [bellSounds, setBellSounds] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [playingId, setPlayingId] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
   const [loading, setLoading] = useState(true);
   
-  const audioRef = useRef(null);
+  const { playingId, togglePlay: handlePlay, stopAudio } = useAudioPlayer();
 
-  // Load bell sounds on mount
   useEffect(() => {
     loadBellSounds();
-  }, []);
-
-  // Cleanup audio on unmount
-  useEffect(() => {
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-    };
   }, []);
 
   const loadBellSounds = async () => {
@@ -45,15 +36,13 @@ function AddBellSound({ onBack }) {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('audio/')) {
       alert('Please upload an audio file (MP3, WAV, OGG, M4A)');
       return;
     }
 
-    // Validate file size (max 10MB for server storage)
-    if (file.size > 10 * 1024 * 1024) {
-      alert('File size must be less than 10MB. Your file is ' + (file.size / (1024 * 1024)).toFixed(2) + 'MB');
+    if (file.size > AUDIO_UPLOAD_CONSTRAINTS.maxSizeBytes) {
+      alert(`File size must be less than ${AUDIO_UPLOAD_CONSTRAINTS.maxSizeMB}MB. Your file is ${(file.size / (1024 * 1024)).toFixed(2)}MB`);
       return;
     }
 
@@ -71,41 +60,7 @@ function AddBellSound({ onBack }) {
       setUploading(false);
     }
 
-    // Reset file input
     e.target.value = '';
-  };
-
-  const handlePlay = (sound) => {
-    if (playingId === sound.id && audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      audioRef.current = null;
-      setPlayingId(null);
-      return;
-    }
-
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
-
-    try {
-      const audio = new Audio(getBellSoundUrl(sound.id));
-      audioRef.current = audio;
-      
-      audio.play();
-      setPlayingId(sound.id);
-      
-      audio.onended = () => {
-        setPlayingId(null);
-        audioRef.current = null;
-      };
-    } catch (error) {
-      console.error('Playback error:', error);
-      alert('Failed to play audio');
-      setPlayingId(null);
-      audioRef.current = null;
-    }
   };
 
   const handleStartEdit = (sound) => {
@@ -140,10 +95,8 @@ function AddBellSound({ onBack }) {
       return;
     }
 
-    if (playingId === id && audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-      setPlayingId(null);
+    if (playingId === id) {
+      stopAudio();
     }
 
     try {
@@ -153,12 +106,6 @@ function AddBellSound({ onBack }) {
       console.error('Failed to delete:', error);
       alert('Failed to delete bell sound');
     }
-  };
-
-  const formatFileSize = (bytes) => {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
   const filteredSounds = bellSounds.filter(sound =>
@@ -175,7 +122,6 @@ function AddBellSound({ onBack }) {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center gap-4">
@@ -194,7 +140,6 @@ function AddBellSound({ onBack }) {
       </div>
 
       <div className="max-w-7xl mx-auto p-6">
-        {/* Search Bar and Upload Button */}
         <div className="mb-4 flex items-center gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
@@ -215,7 +160,6 @@ function AddBellSound({ onBack }) {
           </button>
         </div>
 
-        {/* Bell Sounds List */}
         <div className="bg-white rounded-lg shadow-sm border">
           <div className="p-4 border-b bg-gray-50">
             <h3 className="font-semibold text-gray-900">
@@ -239,7 +183,7 @@ function AddBellSound({ onBack }) {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4 flex-1 min-w-0">
                       <button
-                        onClick={() => handlePlay(sound)}
+                        onClick={() => handlePlay(sound.id)}
                         className={`p-2 rounded-full transition-colors flex-shrink-0 ${
                           playingId === sound.id
                             ? 'bg-blue-600 text-white'
@@ -326,7 +270,6 @@ function AddBellSound({ onBack }) {
         </div>
       </div>
 
-      {/* Upload Modal */}
       {showUploadModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
@@ -367,7 +310,7 @@ function AddBellSound({ onBack }) {
                   <div className="mt-4 text-sm text-gray-500">
                     <p className="font-medium text-gray-700 mb-1">Supported formats:</p>
                     <p>MP3, WAV, OGG, M4A, AAC</p>
-                    <p className="mt-2 text-xs">Maximum file size: 10MB</p>
+                    <p className="mt-2 text-xs">Maximum file size: {AUDIO_UPLOAD_CONSTRAINTS.maxSizeMB}MB</p>
                   </div>
                 </>
               )}

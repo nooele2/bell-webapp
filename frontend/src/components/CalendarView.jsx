@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight, Check, Lock } from 'lucide-react';
 import { formatDate, getDaysInMonth, isToday, isWeekend } from '../utils/dateUtils';
+import { SYSTEM_NO_BELL_SCHEDULE } from '../constants';
+import { getScheduleColorById } from '../utils/scheduleUtils';
 
 function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode, selectedDates }) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -15,6 +17,7 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
     if (!date) return false;
     const assignments = getAssignmentsForDate(date);
     const defaultSchedule = schedules.find(s => s.isDefault === true);
+    // FIXED: Only apply default if NOT weekend
     return assignments.length === 0 && !isWeekend(date) && defaultSchedule;
   };
 
@@ -40,22 +43,7 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
   };
 
   const getScheduleColor = (scheduleId) => {
-    const schedule = schedules.find(s => s.id === scheduleId);
-    
-    // Check if it's the system "No Bell" schedule
-    if (scheduleId === 'system-no-bell') {
-      return { value: '#fee2e2', border: '#ef4444', text: '#991b1b' }; // Light red background, strong red border
-    }
-    
-    // Default to green if not set
-    const defaultColor = { value: '#d1fae5', border: '#10b981', text: '#065f46' };
-    
-    if (!schedule || !schedule.color) {
-      return defaultColor;
-    }
-    
-    // Return the schedule's color (works for both preset and custom colors)
-    return schedule.color;
+    return getScheduleColorById(scheduleId, schedules);
   };
 
   const days = getDaysInMonth(currentMonth);
@@ -77,7 +65,7 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
       {isSelectionMode && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-900 font-medium">
-            📅 Selection Mode: Click on dates to select/deselect them (dates with existing schedules cannot be selected)
+            📅 Selection Mode: Click on dates to select/deselect them (weekends and dates with existing schedules cannot be selected)
           </p>
         </div>
       )}
@@ -91,7 +79,6 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
         </button>
         
         <div className="flex items-center gap-2">
-          {/* Month Selector */}
           <select
             value={currentMonth.getMonth()}
             onChange={(e) => setCurrentMonth(new Date(currentMonth.getFullYear(), parseInt(e.target.value), 1))}
@@ -103,7 +90,6 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
             ))}
           </select>
           
-          {/* Year Selector */}
           <select
             value={currentMonth.getFullYear()}
             onChange={(e) => setCurrentMonth(new Date(parseInt(e.target.value), currentMonth.getMonth(), 1))}
@@ -139,13 +125,16 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
           const dateHasAssignment = hasAssignment(date);
           const isClickable = canSelectDate(date);
           
-          // Get the color for this date
+          // FIXED: Better color logic with weekend check
           let cellColor = { value: 'transparent', border: '#e5e7eb', text: '#111827' };
           if (assignments.length > 0) {
+            // Has assignment - use its color
             cellColor = getScheduleColor(assignments[0].scheduleId);
-          } else if (hasDefault) {
+          } else if (hasDefault && !isWeekendDay) {
+            // Has default and NOT weekend - use default color
             cellColor = defaultColor;
           }
+          // else: no assignment, no default, or is weekend - use transparent
           
           return (
             <div
@@ -153,7 +142,7 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
               onClick={() => date && isClickable && onDateClick(date)}
               className={`min-h-24 p-2 rounded-lg transition-all relative ${
                 !date ? 'bg-gray-50 cursor-default' : 
-                isWeekendDay ? 'bg-white border border-gray-200 cursor-not-allowed' :
+                isWeekendDay ? 'bg-white border border-gray-500 cursor-pointer' :
                 isSelected ? 'bg-green-100 border-2 border-green-400 ring-2 ring-green-300 cursor-pointer' :
                 isTodayDate ? 'border-4 border-blue-600 shadow-lg cursor-pointer' :
                 isSelectionMode && dateHasAssignment ? 'cursor-not-allowed' :
@@ -174,7 +163,7 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
                     </div>
                   )}
                   
-                  {isSelectionMode && dateHasAssignment && (
+                  {isSelectionMode && (dateHasAssignment || isWeekendDay) && (
                     <div className="absolute top-1 right-1 bg-gray-500 text-white rounded-full p-0.5">
                       <Lock size={12} />
                     </div>
@@ -183,7 +172,7 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
                   <div className={`text-base font-black mb-1 ${
                     isTodayDate ? 'text-white text-2xl' :
                     isSelected ? 'text-green-700' :
-                    isWeekendDay ? 'text-gray-500' :
+                    isWeekendDay ? 'text-gray-800' :
                     'text-gray-900'
                   }`}
                   style={!isWeekendDay && !isSelected && !isTodayDate && date ? {
@@ -195,30 +184,31 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
                   
                   {!isSelectionMode && (
                     <>
+                      {/* WEEKEND LABEL */}
                       {isWeekendDay && (
-                        <div className="text-xs text-gray-400 text-center">
+                        <div className="text-xs text-gray-800 text-center">
                           Weekend
                         </div>
                       )}
                       
+                      {/* DEFAULT SCHEDULE (Only on weekdays) - Use schedule's text color */}
                       {!isWeekendDay && assignments.length === 0 && defaultSchedule && !isTodayDate && (
                         <div 
-                          className="text-xs text-center font-medium bg-white rounded px-1.5 py-0.5 border-2"
-                          style={{ 
-                            borderColor: defaultColor.border,
-                            color: defaultColor.text 
-                          }}
+                          className="text-xs text-center font-medium"
+                          style={{ color: defaultColor.text }}
                         >
                           {defaultSchedule.name}
                         </div>
                       )}
                       
+                      {/* DEFAULT SCHEDULE ON TODAY (Only on weekdays) */}
                       {!isWeekendDay && assignments.length === 0 && defaultSchedule && isTodayDate && (
                         <div className="text-xs text-center font-bold text-white">
                           {defaultSchedule.name}
                         </div>
                       )}
                       
+                      {/* ASSIGNED SCHEDULES (Not today) */}
                       {assignments.length > 0 && !isTodayDate && (
                         <div className="space-y-1">
                           {assignments.slice(0, 3).map(assignment => {
@@ -226,7 +216,6 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
                             const isNoBell = assignment.scheduleId === 'system-no-bell';
                             const schedColor = getScheduleColor(assignment.scheduleId);
                             
-                            // For No Bell, show directly on the cell background
                             if (isNoBell) {
                               return (
                                 <div
@@ -262,6 +251,7 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
                         </div>
                       )}
                       
+                      {/* ASSIGNED SCHEDULES (Today) */}
                       {assignments.length > 0 && isTodayDate && (
                         <div className="space-y-1">
                           {assignments.slice(0, 3).map(assignment => {
@@ -300,9 +290,9 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
                     </>
                   )}
                   
-                  {isSelectionMode && dateHasAssignment && (
+                  {isSelectionMode && (dateHasAssignment || isWeekendDay) && (
                     <div className="text-xs text-gray-500 text-center mt-1">
-                      Assigned
+                      {isWeekendDay ? 'Weekend' : 'Assigned'}
                     </div>
                   )}
                 </>
@@ -327,10 +317,9 @@ function CalendarView({ schedules, dateAssignments, onDateClick, isSelectionMode
                   borderColor: defaultColor.border
                 }}
               ></div>
-              <span className="text-gray-600">{defaultSchedule.name} (Default)</span>
+              <span className="text-gray-600">{defaultSchedule.name} (Default - Weekdays only)</span>
             </div>
           )}
-          {/* Show No Bell in legend */}
           <div className="flex items-center gap-2">
             <div 
               className="w-4 h-4 border-2 rounded"

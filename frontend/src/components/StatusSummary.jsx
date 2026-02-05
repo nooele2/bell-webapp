@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Clock, Edit2, Save, X, Plus, Trash2, BellOff } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Edit2, Save, X, Plus, Trash2, BellOff } from 'lucide-react';
+import { API_BASE_URL } from '../constants';
 
 const formatDate = (date) => {
   const d = new Date(date);
@@ -90,7 +91,6 @@ function StatusSummary({ schedules = [], dateAssignments = [], onUpdateAssignmen
 
   const handleStartEdit = () => {
     if (currentAssignment) {
-      // Editing existing assignment
       setEditedScheduleId(currentAssignment.scheduleId);
       setEditedDescription(currentAssignment.description || '');
       if (currentAssignment.scheduleId === 'system-no-bell') {
@@ -99,7 +99,6 @@ function StatusSummary({ schedules = [], dateAssignments = [], onUpdateAssignmen
         setEditedTimes(JSON.parse(JSON.stringify(bellTimes || [])));
       }
     } else if (dateSchedule) {
-      // Creating new assignment from default schedule
       setEditedScheduleId(dateSchedule.id);
       setEditedDescription('');
       setEditedTimes(JSON.parse(JSON.stringify(bellTimes || [])));
@@ -152,13 +151,10 @@ function StatusSummary({ schedules = [], dateAssignments = [], onUpdateAssignmen
       };
 
       if (currentAssignment) {
-        // Update existing assignment
         if (onUpdateAssignment) {
           await onUpdateAssignment(currentAssignment.id, updateData);
         }
       } else {
-        // Create new assignment (was using default)
-        const API_BASE_URL = 'http://localhost:5001/api';
         const response = await fetch(`${API_BASE_URL}/assignments`, {
           method: 'POST',
           credentials: 'include',
@@ -178,7 +174,6 @@ function StatusSummary({ schedules = [], dateAssignments = [], onUpdateAssignmen
       
       setIsEditing(false);
       
-      // Refresh the parent component's data
       if (onRefresh) {
         await onRefresh();
       }
@@ -217,7 +212,6 @@ function StatusSummary({ schedules = [], dateAssignments = [], onUpdateAssignmen
   const displayColor = displaySchedule?.color || scheduleColor;
   const displayIsNoBell = isEditing ? editedScheduleId === 'system-no-bell' : isNoBellSchedule;
 
-  // Include system "No Bell" schedule in available schedules
   const availableSchedules = [
     { id: 'system-no-bell', name: 'No Bell', isSystem: true },
     ...schedules
@@ -225,7 +219,6 @@ function StatusSummary({ schedules = [], dateAssignments = [], onUpdateAssignmen
 
   return (
     <div className="bg-white rounded-lg shadow border border-gray-200 mb-4 overflow-hidden">
-      {/* Gradient Header */}
       <div 
         className="p-4 border-b border-gray-200"
         style={{ 
@@ -275,7 +268,6 @@ function StatusSummary({ schedules = [], dateAssignments = [], onUpdateAssignmen
         </div>
       </div>
 
-      {/* Content area */}
       {isWeekend && !dateSchedule ? (
         <div className="p-8 text-center bg-gradient-to-br from-blue-50 to-indigo-50">
           <div className="text-6xl mb-4">🎉</div>
@@ -369,7 +361,6 @@ function StatusSummary({ schedules = [], dateAssignments = [], onUpdateAssignmen
                 )}
               </div>
 
-              {/* Show edit button for both assigned schedules and default schedule */}
               {dateSchedule && !isWeekend && (
                 <button
                   onClick={handleStartEdit}
