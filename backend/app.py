@@ -10,6 +10,20 @@ from io import BytesIO
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-in-production')
 
+@app.route('/', methods=['GET'])
+def index():
+    return jsonify({
+        'message': 'Bell Schedule API',
+        'status': 'running',
+        'endpoints': {
+            'health': '/api/health',
+            'login': '/api/login',
+            'schedules': '/api/schedules',
+            'public_ringtimes': '/public/ringtimes',
+            'public_ringdates': '/public/ringdates'
+        }
+    })
+
 # CORS Configuration
 CORS(app, 
      origins=['http://localhost:5173', 'http://localhost:3000'],
