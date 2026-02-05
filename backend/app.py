@@ -33,7 +33,9 @@ CORS(app,
      ],
      supports_credentials=True,
      allow_headers=['Content-Type', 'Authorization'],
-     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+     expose_headers=['Set-Cookie'],  # Add this
+     max_age=3600)
 
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -52,12 +54,16 @@ USERS = {
     }
 }
 
-# Session config
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+# Session config - UPDATE THIS SECTION
+app.config['SESSION_COOKIE_SAMESITE'] = 'None'  # Changed from 'Lax'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SECURE'] = False
+app.config['SESSION_COOKIE_SECURE'] = True  # Changed from False - Required for SameSite=None
 app.config['PERMANENT_SESSION_LIFETIME'] = 1800
-app.config['SESSION_COOKIE_DOMAIN'] = None
+app.config['SESSION_COOKIE_DOMAIN'] = None  # This is OK
+
+# Add these new configs
+app.config['SESSION_COOKIE_PATH'] = '/'
+app.config['SESSION_TYPE'] = 'filesystem'  # or 'redis' for production
 
 # Default color presets
 DEFAULT_COLORS = {
@@ -742,6 +748,10 @@ def health():
 if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 5001))
+
+    is_production = os.environ.get('FLASK_ENV') == 'production'
+    
+    app.config['SESSION_COOKIE_SECURE'] = is_production 
     
     print()
     print("=" * 70)
