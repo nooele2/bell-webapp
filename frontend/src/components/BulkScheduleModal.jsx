@@ -1,27 +1,15 @@
 import React, { useState } from 'react';
 import { X, Calendar, Plus, Trash2, AlertCircle } from 'lucide-react';
 import { parseDate, formatDisplayDate } from '../utils/dateUtils';
-
-// System "No Bell" schedule
-const SYSTEM_NO_BELL_SCHEDULE = {
-  id: 'system-no-bell',
-  name: 'No Bell',
-  mode: 'No Bell',
-  isDefault: false,
-  isSystem: true,
-  color: { name: 'Gray', value: '#f3f4f6', text: '#374151' },
-  times: []
-};
+import { SYSTEM_NO_BELL_SCHEDULE } from '../constants';
 
 function BulkScheduleModal({ selectedDates, schedules, onClose, onSave, isListViewMode, dateAssignments }) {
   const [selectedSchedule, setSelectedSchedule] = useState('');
   const [description, setDescription] = useState('');
   const [manualDates, setManualDates] = useState(['']);
 
-  // Include system "No Bell" schedule in the available schedules
   const availableSchedules = [SYSTEM_NO_BELL_SCHEDULE, ...schedules];
 
-  // Check which selected dates already have schedules
   const datesWithSchedules = selectedDates.filter(dateStr => 
     dateAssignments.some(assignment => assignment.date === dateStr)
   );
@@ -33,14 +21,12 @@ function BulkScheduleModal({ selectedDates, schedules, onClose, onSave, isListVi
     }
 
     if (isListViewMode) {
-      // Validate manual dates
       const validDates = manualDates.filter(d => d.trim() !== '');
       if (validDates.length === 0) {
         alert('Please add at least one date');
         return;
       }
 
-      // Check if any manual dates already have schedules
       const conflictDates = validDates.filter(dateStr =>
         dateAssignments.some(assignment => assignment.date === dateStr)
       );
@@ -57,7 +43,6 @@ function BulkScheduleModal({ selectedDates, schedules, onClose, onSave, isListVi
 
       onSave(selectedSchedule, description, validDates);
     } else {
-      // Calendar view mode
       if (datesWithSchedules.length > 0) {
         const conflictDatesList = datesWithSchedules.map(dateStr => {
           const date = parseDate(dateStr);
@@ -112,7 +97,6 @@ function BulkScheduleModal({ selectedDates, schedules, onClose, onSave, isListVi
         </div>
 
         <div className="p-8">
-          {/* Warning if dates already have schedules */}
           {!isListViewMode && datesWithSchedules.length > 0 && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
               <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
@@ -122,9 +106,7 @@ function BulkScheduleModal({ selectedDates, schedules, onClose, onSave, isListVi
             </div>
           )}
 
-          {/* Dates Section */}
           {isListViewMode ? (
-            /* Manual Date Selection for List View */
             <div className="mb-6">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-lg font-semibold text-gray-900">Select Dates *</h3>
@@ -164,7 +146,6 @@ function BulkScheduleModal({ selectedDates, schedules, onClose, onSave, isListVi
               </div>
             </div>
           ) : (
-            /* Selected Dates List for Calendar View */
             <div className="mb-6">
               <h3 className="text-lg font-semibold mb-3 text-gray-900">Selected Dates</h3>
               <div className="bg-gray-50 rounded-lg p-4 max-h-48 overflow-y-auto">
@@ -190,7 +171,6 @@ function BulkScheduleModal({ selectedDates, schedules, onClose, onSave, isListVi
             </div>
           )}
 
-          {/* Schedule Selection */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Select Schedule *
@@ -210,7 +190,6 @@ function BulkScheduleModal({ selectedDates, schedules, onClose, onSave, isListVi
             </select>
           </div>
 
-          {/* Description */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Description (optional)
@@ -224,7 +203,6 @@ function BulkScheduleModal({ selectedDates, schedules, onClose, onSave, isListVi
             />
           </div>
 
-          {/* Action Buttons */}
           <div className="flex gap-3">
             <button
               onClick={handleSave}

@@ -1,31 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Check, Palette } from 'lucide-react';
+import { COLOR_PRESETS } from '../constants';
 
-// Simple color options for schedules with border colors
-const COLOR_OPTIONS = [
-  { name: 'Yellow', value: '#fef3c7', border: '#fbbf24', text: '#854d0e' },
-  { name: 'Blue', value: '#dbeafe', border: '#3b82f6', text: '#1e3a8a' },
-  { name: 'Green', value: '#d1fae5', border: '#10b981', text: '#065f46' },
-  { name: 'Purple', value: '#e9d5ff', border: '#a855f7', text: '#5b21b6' },
-  { name: 'Pink', value: '#fce7f3', border: '#ec4899', text: '#9f1239' },
-  { name: 'Orange', value: '#fed7aa', border: '#f97316', text: '#7c2d12' },
-  { name: 'Red', value: '#fecaca', border: '#ef4444', text: '#7f1d1d' },
-  { name: 'Teal', value: '#ccfbf1', border: '#14b8a6', text: '#134e4a' },
-  { name: 'Indigo', value: '#e0e7ff', border: '#6366f1', text: '#312e81' },
-  { name: 'Lime', value: '#ecfccb', border: '#84cc16', text: '#365314' },
-  { name: 'Gray', value: '#f3f4f6', border: '#6b7280', text: '#374151' },
-  { name: 'Cyan', value: '#cffafe', border: '#06b6d4', text: '#164e63' },
-];
-
-/**
- * Compact Color Picker Component
- */
 function ColorPicker({ selectedColor, onColorSelect, className = '' }) {
   const [showCustomPicker, setShowCustomPicker] = useState(false);
   const [customColor, setCustomColor] = useState({ value: '#ffffff', border: '#000000', text: '#000000' });
   const pickerRef = useRef(null);
 
-  // Close custom picker when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (pickerRef.current && !pickerRef.current.contains(event.target)) {
@@ -39,7 +20,6 @@ function ColorPicker({ selectedColor, onColorSelect, className = '' }) {
     }
   }, [showCustomPicker]);
 
-  // Initialize custom color from selected color if it's custom
   useEffect(() => {
     if (selectedColor && selectedColor.name === 'Custom') {
       setCustomColor({
@@ -66,7 +46,6 @@ function ColorPicker({ selectedColor, onColorSelect, className = '' }) {
     setShowCustomPicker(false);
   };
 
-  // Get contrasting text color for a background
   const getContrastColor = (hexColor) => {
     const r = parseInt(hexColor.substr(1, 2), 16);
     const g = parseInt(hexColor.substr(3, 2), 16);
@@ -78,29 +57,25 @@ function ColorPicker({ selectedColor, onColorSelect, className = '' }) {
   const handleCustomColorChange = (field, value) => {
     const newCustomColor = { ...customColor, [field]: value };
     
-    // Auto-calculate text color and border if background changes
     if (field === 'value') {
       newCustomColor.text = getContrastColor(value);
-      // Make border a darker/more saturated version of the background
-      newCustomColor.border = value; // User can customize if needed
+      newCustomColor.border = value;
     }
     
     setCustomColor(newCustomColor);
   };
 
   const handleResetToDefault = () => {
-    const defaultColor = COLOR_OPTIONS[0]; // Yellow
+    const defaultColor = COLOR_PRESETS[0];
     setCustomColor({ value: defaultColor.value, border: defaultColor.border, text: defaultColor.text });
   };
 
   return (
     <div className={className}>
-      {/* Boxed Color Picker matching other input fields */}
       <div className="border border-gray-300 rounded-lg px-4 py-2 bg-white focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-500">
         <div className="flex items-center gap-2">
-          {/* Color circles */}
           <div className="flex items-center gap-1.5 flex-wrap flex-1">
-            {COLOR_OPTIONS.map((color) => (
+            {COLOR_PRESETS.map((color) => (
               <button
                 key={color.name}
                 type="button"
@@ -122,7 +97,6 @@ function ColorPicker({ selectedColor, onColorSelect, className = '' }) {
             ))}
           </div>
 
-          {/* Custom Color Button */}
           <div className="relative" ref={pickerRef}>
             <button
               type="button"
@@ -139,13 +113,11 @@ function ColorPicker({ selectedColor, onColorSelect, className = '' }) {
               {isCustomColorSelected && <Check size={10} className="text-gray-700" strokeWidth={3} />}
             </button>
 
-            {/* Custom Color Picker Dropdown */}
             {showCustomPicker && (
               <div className="absolute z-50 mt-2 right-0 w-64 bg-white border border-gray-200 rounded-lg shadow-xl p-3">
                 <div className="space-y-2.5">
                   <div className="text-sm font-medium text-gray-900">Custom Color</div>
                   
-                  {/* Background Color */}
                   <div>
                     <label className="block text-xs text-gray-600 mb-1">Background</label>
                     <div className="flex items-center gap-2">
@@ -169,7 +141,6 @@ function ColorPicker({ selectedColor, onColorSelect, className = '' }) {
                     </div>
                   </div>
 
-                  {/* Border Color */}
                   <div>
                     <label className="block text-xs text-gray-600 mb-1">Border</label>
                     <div className="flex items-center gap-2">
@@ -193,7 +164,6 @@ function ColorPicker({ selectedColor, onColorSelect, className = '' }) {
                     </div>
                   </div>
 
-                  {/* Text Color */}
                   <div>
                     <label className="block text-xs text-gray-600 mb-1">Text</label>
                     <div className="flex items-center gap-2">
@@ -217,7 +187,6 @@ function ColorPicker({ selectedColor, onColorSelect, className = '' }) {
                     </div>
                   </div>
 
-                  {/* Actions */}
                   <div className="flex gap-2">
                     <button
                       type="button"

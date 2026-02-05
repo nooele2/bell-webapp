@@ -1,25 +1,25 @@
 import React, { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { login } from '../services/api';
 
 function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     
-    const result = await login(email, password);
-    
-    if (!result.success) {
-      setError(result.error || 'Invalid credentials');
+    try {
+      const result = await login(email, password);
+      window.location.reload();
+    } catch (err) {
+      setError(err.message || 'Invalid credentials');
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   const handleKeyPress = (e) => {

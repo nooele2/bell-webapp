@@ -1,10 +1,11 @@
-from flask import Flask, request, jsonify, session, send_file
+from flask import Flask, request, jsonify, session, send_file, Response
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 import os
 import json
 from datetime import datetime
+from io import BytesIO
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-in-production')
@@ -16,18 +17,13 @@ CORS(app,
      allow_headers=['Content-Type', 'Authorization'],
      methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
 
-# Configuration - Use existing piring directory
+# Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PIRING_DIR = os.path.join(BASE_DIR, 'piring')
-RINGTIMES_PATH = os.path.join(PIRING_DIR, 'ringtimes')
-RINGDATES_PATH = os.path.join(PIRING_DIR, 'ringdates')
-
-# New data files for web interface
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 SCHEDULES_FILE = os.path.join(DATA_DIR, 'schedules.json')
 ASSIGNMENTS_FILE = os.path.join(DATA_DIR, 'assignments.json')
 
-# Create data directory
+# Create directories
 os.makedirs(DATA_DIR, exist_ok=True)
 
 # Users
@@ -41,7 +37,7 @@ USERS = {
 # Session config
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
+app.config['SESSION_COOKIE_SECURE'] = False
 app.config['PERMANENT_SESSION_LIFETIME'] = 1800
 app.config['SESSION_COOKIE_DOMAIN'] = None
 
@@ -54,201 +50,19 @@ DEFAULT_COLORS = {
 }
 
 # ============================================================================
-# HELPER FUNCTIONS - Parse existing ringtimes format
+# HELPER FUNCTIONS
 # ============================================================================
 
-def parse_ringtimes():
-    """Parse the existing ringtimes file into structured data"""
-    schedules = []
-    
-    if not os.path.exists(RINGTIMES_PATH):
-        return schedules
-    
-    try:
-        with open(RINGTIMES_PATH, 'r') as f:
-            lines = f.readlines()
-        
-        current_schedule = None
-        schedule_id = 1
-        
-        for line in lines:
-            line = line.strip()
-            
-            # Skip empty lines and comments
-            if not line or line.startswith('#'):
-                continue
-            
-            # Check if this is a schedule header (contains letters indicating mode)
-            parts = line.split()
-            if len(parts) >= 2:
-                time_part = parts[0]
-                mode_part = parts[1]
-                
-                # If mode_part contains letters, it's a schedule identifier
-                if any(c.isalpha() for c in mode_part):
-                    # Save previous schedule if exists
-                    if current_schedule and current_schedule['times']:
-                        schedules.append(current_schedule)
-                    
-                    # Determine schedule type from mode code
-                    mode_name = "Normal"
-                    schedule_name = "Normal Schedule"
-                    
-                    if 'L' in mode_part:
-                        mode_name = "Late Start"
-                        schedule_name = "Late Start Schedule"
-                    elif 'B' in mode_part:
-                        mode_name = "Buddy"
-                        schedule_name = "Buddy Schedule"
-                    elif 'A' in mode_part:
-                        mode_name = "Assembly"
-                        schedule_name = "Assembly Schedule"
-                    
-                    # Get default color for this mode
-                    default_color = DEFAULT_COLORS.get(mode_name, DEFAULT_COLORS["Normal"])
-                    
-                    # Start new schedule
-                    current_schedule = {
-                        'id': str(schedule_id),
-                        'name': schedule_name,
-                        'mode': mode_name,
-                        'original_code': mode_part,
-                        'color': default_color,
-                        'bellSoundId': None,  # Initialize bell sound field
-                        'times': []
-                    }
-                    schedule_id += 1
-                    
-                    # Add the first time
-                    description = ' '.join(parts[2:]) if len(parts) > 2 else f"Bell {time_part}"
-                    current_schedule['times'].append({
-                        'time': time_part,
-                        'description': description
-                    })
-                else:
-                    # This is a continuation of the current schedule
-                    if current_schedule:
-                        description = ' '.join(parts[1:]) if len(parts) > 1 else f"Bell {time_part}"
-                        current_schedule['times'].append({
-                            'time': time_part,
-                            'description': description
-                        })
-        
-        # Add the last schedule
-        if current_schedule and current_schedule['times']:
-            schedules.append(current_schedule)
-            
-    except Exception as e:
-        print(f"Error parsing ringtimes: {e}")
-    
-    return schedules
-
-def parse_ringdates():
-    """Parse the existing ringdates file into assignments"""
-    assignments = []
-    
-    if not os.path.exists(RINGDATES_PATH):
-        return assignments
-    
-    try:
-        with open(RINGDATES_PATH, 'r') as f:
-            lines = f.readlines()
-        
-        for line in lines:
-            line = line.strip()
-            
-            # Skip empty lines and comments
-            if not line or line.startswith('#'):
-                continue
-            
-            parts = line.split()
-            if len(parts) >= 2:
-                date_str = parts[0]  # Format: YYYY-MM-DD
-                mode_code = parts[1]
-                description = ' '.join(parts[2:]) if len(parts) > 2 else ''
-                
-                assignments.append({
-                    'id': f"{date_str}_{mode_code}",
-                    'date': date_str,
-                    'mode_code': mode_code,
-                    'scheduleId': None,  # Will be matched later
-                    'description': description
-                })
-                
-    except Exception as e:
-        print(f"Error parsing ringdates: {e}")
-    
-    return assignments
-
-def init_data_files():
-    """Initialize JSON data files from existing ringtimes/ringdates if they don't exist"""
-    
-    # Initialize schedules from ringtimes
-    if not os.path.exists(SCHEDULES_FILE):
-        schedules = parse_ringtimes()
-        
-        # If no ringtimes, use defaults
-        if not schedules:
-            schedules = [
-                {
-                    "id": "1",
-                    "name": "Normal Schedule",
-                    "mode": "Normal",
-                    "isDefault": True,
-                    "color": DEFAULT_COLORS["Normal"],
-                    "bellSoundId": None,
-                    "times": [
-                        {"time": "09:00", "description": "1st period"},
-                        {"time": "10:00", "description": "2nd period"},
-                        {"time": "10:30", "description": "Morning break"},
-                        {"time": "11:00", "description": "3rd period"},
-                        {"time": "12:00", "description": "Lunch break"},
-                        {"time": "13:00", "description": "4th period"},
-                        {"time": "14:00", "description": "5th period"},
-                        {"time": "15:00", "description": "School end"}
-                    ]
-                }
-            ]
-        else:
-            # Set first schedule as default
-            schedules[0]['isDefault'] = True
-        
-        with open(SCHEDULES_FILE, 'w') as f:
-            json.dump(schedules, f, indent=2)
-    
-    # Initialize assignments from ringdates
-    if not os.path.exists(ASSIGNMENTS_FILE):
-        assignments = parse_ringdates()
-        
-        # Match assignments to schedule IDs
-        schedules = load_schedules()
-        for assignment in assignments:
-            mode_code = assignment.get('mode_code', '')
-            
-            # Match mode code to schedule
-            for schedule in schedules:
-                original_code = schedule.get('original_code', '')
-                if original_code and mode_code in original_code:
-                    assignment['scheduleId'] = schedule['id']
-                    break
-        
-        with open(ASSIGNMENTS_FILE, 'w') as f:
-            json.dump(assignments, f, indent=2)
-
-# Helper functions for JSON data
 def load_schedules():
     try:
         with open(SCHEDULES_FILE, 'r') as f:
             schedules = json.load(f)
             
-        # Ensure all schedules have required fields
         for schedule in schedules:
-            # Ensure color field exists
             if 'color' not in schedule:
                 mode = schedule.get('mode', 'Normal')
                 schedule['color'] = DEFAULT_COLORS.get(mode, DEFAULT_COLORS["Normal"])
             
-            # Ensure bellSoundId field exists (can be None)
             if 'bellSoundId' not in schedule:
                 schedule['bellSoundId'] = None
         
@@ -280,6 +94,199 @@ def save_assignments(assignments):
     except Exception as e:
         print(f"Error saving assignments: {e}")
         return False
+
+# ============================================================================
+# PUBLIC URL ENDPOINTS - FOR BASH SCRIPT TO READ
+# These endpoints are accessible without authentication
+# Similar to how Google Sheets links work
+# ============================================================================
+
+@app.route('/public/ringtimes', methods=['GET'])
+def public_ringtimes():
+    """
+    PUBLIC ENDPOINT - Bash script reads from here
+    URL: http://your-server:5001/public/ringtimes
+    
+    Returns ringtimes in piring format (plain text)
+    Always up-to-date with latest schedules
+    """
+    try:
+        schedules = load_schedules()
+        
+        lines = []
+        lines.append("# Bell Schedule - ringtimes file")
+        lines.append("# Live from Bell Schedule Management System")
+        lines.append(f"# Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append("#")
+        lines.append("# Format: HH:MMsR Description")
+        lines.append("# s = Schedule code (space for Normal, letter for Special)")
+        lines.append("# R = Ringtone code (0-9, or - for muted)")
+        lines.append("#")
+        
+        # Generate schedule codes
+        schedule_codes = {}
+        normal_schedule = None
+        special_schedules = []
+        
+        for schedule in schedules:
+            if schedule.get('isSystem'):
+                continue
+            
+            if schedule.get('isDefault'):
+                normal_schedule = schedule
+                schedule_codes[schedule['id']] = ' '
+            else:
+                special_schedules.append(schedule)
+        
+        # Assign letter codes to special schedules
+        code_letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+        for i, schedule in enumerate(special_schedules):
+            if i < len(code_letters):
+                schedule_codes[schedule['id']] = code_letters[i]
+        
+        # Export Normal schedule first
+        if normal_schedule and normal_schedule.get('times'):
+            lines.append("")
+            lines.append(f"# Normal Schedule: {normal_schedule['name']}")
+            for i, time_entry in enumerate(normal_schedule['times']):
+                time_str = time_entry['time']
+                description = time_entry.get('description', '')
+                
+                if i == 0:
+                    lines.append(f"{time_str} 0 {description}")
+                else:
+                    lines.append(f"{time_str}   {description}")
+        
+        # Export Special schedules
+        for schedule in special_schedules:
+            if not schedule.get('times'):
+                continue
+                
+            schedule_code = schedule_codes.get(schedule['id'], 'X')
+            lines.append("")
+            lines.append(f"# Special Schedule ({schedule_code}): {schedule['name']}")
+            
+            for i, time_entry in enumerate(schedule['times']):
+                time_str = time_entry['time']
+                description = time_entry.get('description', '')
+                
+                if i == 0:
+                    lines.append(f"{time_str} {schedule_code}0 {description}")
+                else:
+                    lines.append(f"{time_str}   {description}")
+        
+        content = '\n'.join(lines)
+        
+        # Return as plain text (like reading from a URL)
+        return Response(content, mimetype='text/plain')
+        
+    except Exception as e:
+        print(f"Error generating ringtimes: {e}")
+        return Response(f"# Error: {str(e)}", mimetype='text/plain'), 500
+
+
+@app.route('/public/ringdates', methods=['GET'])
+def public_ringdates():
+    """
+    PUBLIC ENDPOINT - Bash script reads from here
+    URL: http://your-server:5001/public/ringdates
+    
+    Returns ringdates in piring format (plain text)
+    Always up-to-date with latest date assignments
+    """
+    try:
+        schedules = load_schedules()
+        assignments = load_assignments()
+        
+        lines = []
+        lines.append("# Bell Schedule - ringdates file")
+        lines.append("# Live from Bell Schedule Management System")
+        lines.append(f"# Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append("#")
+        lines.append("# Format: YYYY-MM-DDsP Description")
+        lines.append("# s = Schedule code (space for No-Bells, letter for Special)")
+        lines.append("# P = + for Additional schedule (keeps Normal schedule)")
+        lines.append("#")
+        
+        # Generate schedule codes (same as ringtimes)
+        schedule_codes = {}
+        normal_schedule = None
+        special_schedules = []
+        
+        for schedule in schedules:
+            if schedule.get('isSystem'):
+                continue
+            
+            if schedule.get('isDefault'):
+                normal_schedule = schedule
+                schedule_codes[schedule['id']] = ' '
+            else:
+                special_schedules.append(schedule)
+        
+        # Assign letter codes
+        code_letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+        for i, schedule in enumerate(special_schedules):
+            if i < len(code_letters):
+                schedule_codes[schedule['id']] = code_letters[i]
+        
+        # Sort assignments by date
+        sorted_assignments = sorted(assignments, key=lambda a: a['date'])
+        
+        # Export assignments
+        for assignment in sorted_assignments:
+            date_str = assignment['date']
+            schedule_id = assignment['scheduleId']
+            description = assignment.get('description', '')
+            
+            # Handle "No Bell" system schedule
+            if schedule_id == 'system-no-bell':
+                lines.append(f"{date_str}   {description if description else 'No Bells'}")
+            else:
+                schedule_code = schedule_codes.get(schedule_id, 'X')
+                lines.append(f"{date_str} {schedule_code}  {description}")
+        
+        content = '\n'.join(lines)
+        
+        # Return as plain text (like reading from a URL)
+        return Response(content, mimetype='text/plain')
+        
+    except Exception as e:
+        print(f"Error generating ringdates: {e}")
+        return Response(f"# Error: {str(e)}", mimetype='text/plain'), 500
+
+
+# Initialize with default data if needed
+def init_data_files():
+    """Initialize JSON data files with defaults if they don't exist"""
+    
+    if not os.path.exists(SCHEDULES_FILE):
+        schedules = [
+            {
+                "id": "1",
+                "name": "Normal Schedule",
+                "mode": "Normal",
+                "isDefault": True,
+                "color": DEFAULT_COLORS["Normal"],
+                "bellSoundId": None,
+                "times": [
+                    {"time": "09:00", "description": "1st period"},
+                    {"time": "10:00", "description": "2nd period"},
+                    {"time": "10:30", "description": "Morning break"},
+                    {"time": "11:00", "description": "3rd period"},
+                    {"time": "12:00", "description": "Lunch break"},
+                    {"time": "13:00", "description": "4th period"},
+                    {"time": "14:00", "description": "5th period"},
+                    {"time": "15:00", "description": "School end"}
+                ]
+            }
+        ]
+        
+        with open(SCHEDULES_FILE, 'w') as f:
+            json.dump(schedules, f, indent=2)
+    
+    if not os.path.exists(ASSIGNMENTS_FILE):
+        with open(ASSIGNMENTS_FILE, 'w') as f:
+            json.dump([], f, indent=2)
 
 # Initialize data
 init_data_files()
@@ -343,7 +350,7 @@ def check_auth():
     return jsonify({'authenticated': False}), 401
 
 # ============================================================================
-# SCHEDULES API (UPDATED WITH BELL SOUND SUPPORT)
+# SCHEDULES API
 # ============================================================================
 
 @app.route('/api/schedules', methods=['GET'])
@@ -363,19 +370,15 @@ def create_schedule():
     
     new_schedule['id'] = str(int(datetime.now().timestamp() * 1000))
     
-    # Ensure isDefault is set
     if 'isDefault' not in new_schedule:
         new_schedule['isDefault'] = False
     
-    # Ensure color is set
     if 'color' not in new_schedule:
         mode = new_schedule.get('mode', 'Normal')
         new_schedule['color'] = DEFAULT_COLORS.get(mode, DEFAULT_COLORS["Normal"])
     
-    # Handle bellSoundId - can be None or a valid sound ID
     bell_sound_id = new_schedule.get('bellSoundId')
     if bell_sound_id:
-        # Validate bell sound exists
         bell_sounds = load_bell_sounds_meta()
         if not any(sound['id'] == bell_sound_id for sound in bell_sounds):
             return jsonify({'error': 'Invalid bell sound ID'}), 400
@@ -386,6 +389,7 @@ def create_schedule():
     schedules.append(new_schedule)
     
     if save_schedules(schedules):
+        print(f"🔔 Schedule updated - Public URLs refreshed automatically!")
         return jsonify(new_schedule), 201
     return jsonify({'error': 'Failed to save schedule'}), 500
 
@@ -397,27 +401,23 @@ def update_schedule(schedule_id):
     
     for i, schedule in enumerate(schedules):
         if schedule['id'] == schedule_id:
-            # Preserve ID
             schedules[i] = {**updated_data, 'id': schedule_id}
             
-            # Ensure color is preserved or set
             if 'color' not in schedules[i]:
                 mode = schedules[i].get('mode', 'Normal')
                 schedules[i]['color'] = DEFAULT_COLORS.get(mode, DEFAULT_COLORS["Normal"])
             
-            # Handle bellSoundId update
             bell_sound_id = updated_data.get('bellSoundId')
             if bell_sound_id:
-                # Validate bell sound exists
                 bell_sounds = load_bell_sounds_meta()
                 if not any(sound['id'] == bell_sound_id for sound in bell_sounds):
                     return jsonify({'error': 'Invalid bell sound ID'}), 400
                 schedules[i]['bellSoundId'] = bell_sound_id
             else:
-                # Explicitly set to None if not provided or empty
                 schedules[i]['bellSoundId'] = None
             
             if save_schedules(schedules):
+                print(f"🔔 Schedule updated - Public URLs refreshed automatically!")
                 return jsonify(schedules[i])
             return jsonify({'error': 'Failed to update schedule'}), 500
     
@@ -432,10 +432,11 @@ def delete_schedule(schedule_id):
     if not save_schedules(schedules):
         return jsonify({'error': 'Failed to delete schedule'}), 500
     
-    # Also remove assignments for this schedule
     assignments = load_assignments()
     assignments = [a for a in assignments if a['scheduleId'] != schedule_id]
     save_assignments(assignments)
+    
+    print(f"🔔 Schedule deleted - Public URLs refreshed automatically!")
     
     return jsonify({'success': True})
 
@@ -463,7 +464,6 @@ def create_assignment():
     if not dates or not schedule_id:
         return jsonify({'error': 'Dates and scheduleId are required'}), 400
     
-    # Validate bell sound if provided
     if bell_sound_id:
         bell_sounds = load_bell_sounds_meta()
         if not any(sound['id'] == bell_sound_id for sound in bell_sounds):
@@ -478,11 +478,9 @@ def create_assignment():
             'description': description
         }
         
-        # Only add customTimes if provided
         if custom_times:
             new_assignment['customTimes'] = custom_times
         
-        # Add bellSoundId if provided (can override schedule's default)
         if bell_sound_id is not None:
             new_assignment['bellSoundId'] = bell_sound_id
             
@@ -490,6 +488,7 @@ def create_assignment():
         created_assignments.append(new_assignment)
     
     if save_assignments(assignments):
+        print(f"🔔 Assignment created - Public URLs refreshed automatically!")
         return jsonify({'success': True, 'assignments': created_assignments}), 201
     return jsonify({'error': 'Failed to save assignment'}), 500
 
@@ -499,41 +498,35 @@ def update_assignment(assignment_id):
     assignments = load_assignments()
     data = request.json
     
-    # Find the assignment to update
     for i, assignment in enumerate(assignments):
         if assignment['id'] == assignment_id:
-            # Update the assignment with new data
             assignments[i] = {
-                'id': assignment_id,  # Keep the same ID
+                'id': assignment_id,
                 'date': data.get('date', assignment['date']),
                 'scheduleId': data.get('scheduleId', assignment['scheduleId']),
                 'description': data.get('description', assignment.get('description', ''))
             }
             
-            # Handle customTimes - only add if provided, otherwise remove it
             if 'customTimes' in data:
                 if data['customTimes'] is not None:
                     assignments[i]['customTimes'] = data['customTimes']
-                # If customTimes is explicitly None, remove it from the assignment
                 elif 'customTimes' in assignments[i]:
                     del assignments[i]['customTimes']
             
-            # Handle bellSoundId - can override schedule's default
             if 'bellSoundId' in data:
                 bell_sound_id = data['bellSoundId']
                 
-                # Validate bell sound if provided and not null
                 if bell_sound_id:
                     bell_sounds = load_bell_sounds_meta()
                     if not any(sound['id'] == bell_sound_id for sound in bell_sounds):
                         return jsonify({'error': 'Invalid bell sound ID'}), 400
                     assignments[i]['bellSoundId'] = bell_sound_id
                 else:
-                    # If null, remove the field to use schedule default
                     if 'bellSoundId' in assignments[i]:
                         del assignments[i]['bellSoundId']
             
             if save_assignments(assignments):
+                print(f"🔔 Assignment updated - Public URLs refreshed automatically!")
                 return jsonify(assignments[i])
             return jsonify({'error': 'Failed to update assignment'}), 500
     
@@ -546,44 +539,9 @@ def delete_assignment(assignment_id):
     assignments = [a for a in assignments if a['id'] != assignment_id]
     
     if save_assignments(assignments):
+        print(f"🔔 Assignment deleted - Public URLs refreshed automatically!")
         return jsonify({'success': True})
     return jsonify({'error': 'Failed to delete assignment'}), 500
-
-# ============================================================================
-# LEGACY ENDPOINTS (for backward compatibility)
-# ============================================================================
-
-@app.route('/api/schedule/times', methods=['GET'])
-@login_required
-def get_schedule_times():
-    try:
-        with open(RINGTIMES_PATH, 'r') as f:
-            content = f.read()
-        
-        return jsonify({
-            'success': True,
-            'content': content,
-            'path': RINGTIMES_PATH
-        })
-    except FileNotFoundError:
-        return jsonify({
-            'success': False,
-            'error': 'Ringtimes file not found'
-        }), 404
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/api/health', methods=['GET'])
-def health():
-    return jsonify({
-        'status': 'ok', 
-        'message': 'Bell Schedule API is running',
-        'ringtimes_exists': os.path.exists(RINGTIMES_PATH),
-        'ringdates_exists': os.path.exists(RINGDATES_PATH)
-    })
 
 # ============================================================================
 # BELL SOUNDS API
@@ -592,7 +550,6 @@ def health():
 BELL_SOUNDS_DIR = os.path.join(DATA_DIR, 'bell_sounds')
 BELL_SOUNDS_META_FILE = os.path.join(DATA_DIR, 'bell_sounds_meta.json')
 
-# Create bell sounds directory
 os.makedirs(BELL_SOUNDS_DIR, exist_ok=True)
 
 def load_bell_sounds_meta():
@@ -629,23 +586,19 @@ def upload_bell_sound():
         if file.filename == '':
             return jsonify({'error': 'No file selected'}), 400
         
-        # Validate file type
         allowed_extensions = {'mp3', 'wav', 'ogg', 'm4a', 'aac'}
         file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
         
         if file_ext not in allowed_extensions:
             return jsonify({'error': 'Invalid file type. Allowed: MP3, WAV, OGG, M4A, AAC'}), 400
         
-        # Create unique filename
         timestamp = int(datetime.now().timestamp() * 1000)
         safe_filename = f"{timestamp}_{file.filename}"
         file_path = os.path.join(BELL_SOUNDS_DIR, safe_filename)
         
-        # Save file
         file.save(file_path)
         file_size = os.path.getsize(file_path)
         
-        # Create metadata
         meta = load_bell_sounds_meta()
         new_sound = {
             'id': str(timestamp),
@@ -715,7 +668,6 @@ def delete_bell_sound(sound_id):
         if not sound:
             return jsonify({'error': 'Sound not found'}), 404
         
-        # Update any schedules using this sound to null
         schedules = load_schedules()
         schedules_updated = False
         for schedule in schedules:
@@ -725,9 +677,7 @@ def delete_bell_sound(sound_id):
         
         if schedules_updated:
             save_schedules(schedules)
-            print(f"Updated schedules to remove bell sound reference: {sound_id}")
         
-        # Update any assignments using this sound to remove the override
         assignments = load_assignments()
         assignments_updated = False
         for assignment in assignments:
@@ -737,14 +687,11 @@ def delete_bell_sound(sound_id):
         
         if assignments_updated:
             save_assignments(assignments)
-            print(f"Updated assignments to remove bell sound reference: {sound_id}")
         
-        # Delete file
         file_path = os.path.join(BELL_SOUNDS_DIR, sound['savedFileName'])
         if os.path.exists(file_path):
             os.remove(file_path)
         
-        # Update metadata
         meta = [s for s in meta if s['id'] != sound_id]
         save_bell_sounds_meta(meta)
         
@@ -755,18 +702,47 @@ def delete_bell_sound(sound_id):
         return jsonify({'error': str(e)}), 500
 
 # ============================================================================
+# STATUS ENDPOINT
+# ============================================================================
+
+@app.route('/api/health', methods=['GET'])
+def health():
+    return jsonify({
+        'status': 'ok', 
+        'message': 'Bell Schedule API is running',
+        'public_urls': {
+            'ringtimes': f'http://localhost:5001/public/ringtimes',
+            'ringdates': f'http://localhost:5001/public/ringdates',
+            'info': 'Bash script can read directly from these URLs'
+        }
+    })
+
+# ============================================================================
 # MAIN
 # ============================================================================
 
 if __name__ == '__main__':
-    print("🔔 Bell Schedule Management System")
-    print(f"📂 Piring directory: {PIRING_DIR}")
-    print(f"📄 Ringtimes: {RINGTIMES_PATH} - {'✅ Found' if os.path.exists(RINGTIMES_PATH) else '❌ Not found'}")
-    print(f"📄 Ringdates: {RINGDATES_PATH} - {'✅ Found' if os.path.exists(RINGDATES_PATH) else '❌ Not found'}")
-    print(f"💾 Data directory: {DATA_DIR}")
+    print("=" * 70)
+    print("🔔 Bell Schedule Management System - URL Based Integration")
+    print("=" * 70)
+    print()
+    print("📍 PUBLIC URLs (for bash script to read):")
+    print("   Ringtimes: http://localhost:5001/public/ringtimes")
+    print("   Ringdates: http://localhost:5001/public/ringdates")
+    print()
+    print("🔗 BASH SCRIPT USAGE:")
+    print("   Instead of reading local files, use:")
+    print("   curl http://localhost:5001/public/ringtimes")
+    print("   curl http://localhost:5001/public/ringdates")
+    print()
+    print("🔄 AUTOMATIC UPDATES:")
+    print("   - URLs always return latest data")
+    print("   - Changes in web app = instant URL update")
+    print("   - No file sync needed!")
     print()
     print("✅ Backend running on: http://localhost:5001")
-    print("📡 Accepting requests from: http://localhost:3000, http://localhost:5173")
+    print("📡 Web app: http://localhost:3000")
+    print("=" * 70)
     print()
     
     app.run(debug=True, host='0.0.0.0', port=5001)

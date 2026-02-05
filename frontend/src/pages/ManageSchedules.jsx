@@ -1,77 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Plus, Clock, Edit2, Trash2, Save, X, Star, BellOff, Volume2, Palette } from 'lucide-react';
-import { getBellSounds, getBellSoundUrl } from '../services/bellSoundsApi';
+import { getBellSounds, getBellSoundUrl, getSchedules, createSchedule, updateSchedule, deleteSchedule } from '../services/api';
 import BellSoundSelector from '../components/Bellsoundselector';
 import ColorPicker from '../components/Colorpicker';
-
-// API functions
-const API_BASE_URL = 'http://localhost:5001/api';
-
-const getSchedules = async () => {
-  const response = await fetch(`${API_BASE_URL}/schedules`, {
-    credentials: 'include',
-  });
-  if (!response.ok) throw new Error('Failed to fetch schedules');
-  return response.json();
-};
-
-const createSchedule = async (schedule) => {
-  const response = await fetch(`${API_BASE_URL}/schedules`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(schedule),
-  });
-  if (!response.ok) throw new Error('Failed to create schedule');
-  return response.json();
-};
-
-const updateSchedule = async (id, schedule) => {
-  const response = await fetch(`${API_BASE_URL}/schedules/${id}`, {
-    method: 'PUT',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(schedule),
-  });
-  if (!response.ok) throw new Error('Failed to update schedule');
-  return response.json();
-};
-
-const deleteSchedule = async (id) => {
-  const response = await fetch(`${API_BASE_URL}/schedules/${id}`, {
-    method: 'DELETE',
-    credentials: 'include',
-  });
-  if (!response.ok) throw new Error('Failed to delete schedule');
-  return response.json();
-};
-
-// Color presets for fallback with border colors
-const COLOR_PRESETS = [
-  { name: 'Yellow', value: '#fef3c7', border: '#fbbf24', text: '#854d0e' },
-  { name: 'Blue', value: '#dbeafe', border: '#3b82f6', text: '#1e3a8a' },
-  { name: 'Green', value: '#d1fae5', border: '#10b981', text: '#065f46' },
-  { name: 'Purple', value: '#e9d5ff', border: '#a855f7', text: '#5b21b6' },
-  { name: 'Pink', value: '#fce7f3', border: '#ec4899', text: '#9f1239' },
-  { name: 'Orange', value: '#fed7aa', border: '#f97316', text: '#7c2d12' },
-  { name: 'Red', value: '#fecaca', border: '#ef4444', text: '#7f1d1d' },
-  { name: 'Teal', value: '#ccfbf1', border: '#14b8a6', text: '#134e4a' },
-  { name: 'Indigo', value: '#e0e7ff', border: '#6366f1', text: '#312e81' },
-  { name: 'Lime', value: '#ecfccb', border: '#84cc16', text: '#365314' },
-  { name: 'Gray', value: '#f3f4f6', border: '#6b7280', text: '#374151' },
-  { name: 'Cyan', value: '#cffafe', border: '#06b6d4', text: '#164e63' },
-];
-
-// System "No Bell" schedule configuration
-const SYSTEM_NO_BELL_SCHEDULE = {
-  id: 'system-no-bell',
-  name: 'No Bell',
-  mode: 'No Bell',
-  isDefault: false,
-  isSystem: true,
-  color: { name: 'Gray', value: '#f3f4f6', border: '#6b7280', text: '#374151' },
-  times: []
-};
+import { SYSTEM_NO_BELL_SCHEDULE, COLOR_PRESETS } from '../constants';
+import { useAudioPlayer } from '../hooks/useAudioPlayer';
+import { getBellSoundName, canDeleteSchedule, canSetAsDefault, validateSchedule } from '../utils/scheduleUtils';
 
 function ManageSchedules({ onBack }) {
   const [schedules, setSchedules] = useState([]);
@@ -79,24 +13,19 @@ function ManageSchedules({ onBack }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [playingBellSoundId, setPlayingBellSoundId] = useState(null);
   
-  const audioRef = useRef(null);
+  const { playingId: playingBellSoundId, togglePlay: handlePlayBellSound, stopAudio } = useAudioPlayer();
 
   useEffect(() => {
     loadSchedules();
     loadBellSounds();
   }, []);
 
-  // Cleanup audio on unmount
   useEffect(() => {
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
+      stopAudio();
     };
-  }, []);
+  }, [stopAudio]);
 
   const loadSchedules = async () => {
     try {
@@ -120,55 +49,13 @@ function ManageSchedules({ onBack }) {
     }
   };
 
-  const handlePlayBellSound = (soundId) => {
-    if (playingBellSoundId === soundId && audioRef.current) {
-      // Stop playing
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      audioRef.current = null;
-      setPlayingBellSoundId(null);
-      return;
-    }
-
-    // Stop any currently playing audio
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
-
-    try {
-      const audio = new Audio(getBellSoundUrl(soundId));
-      audioRef.current = audio;
-      
-      audio.play();
-      setPlayingBellSoundId(soundId);
-      
-      audio.onended = () => {
-        setPlayingBellSoundId(null);
-        audioRef.current = null;
-      };
-
-      audio.onerror = () => {
-        console.error('Error playing audio');
-        setPlayingBellSoundId(null);
-        audioRef.current = null;
-        alert('Failed to play audio');
-      };
-    } catch (error) {
-      console.error('Playback error:', error);
-      alert('Failed to play audio');
-      setPlayingBellSoundId(null);
-      audioRef.current = null;
-    }
-  };
-
   const handleAddNew = () => {
     setEditingSchedule({
       id: null,
       name: '',
       mode: '',
       isDefault: false,
-      color: { name: 'Yellow', value: '#fef3c7', border: '#fbbf24', text: '#854d0e' },
+      color: COLOR_PRESETS[0],
       bellSoundId: null,
       times: [{ time: '', description: '' }]
     });
@@ -183,7 +70,7 @@ function ManageSchedules({ onBack }) {
     
     const scheduleWithColor = {
       ...schedule,
-      color: schedule.color || { name: 'Yellow', value: '#fef3c7', border: '#fbbf24', text: '#854d0e' },
+      color: schedule.color || COLOR_PRESETS[0],
       bellSoundId: schedule.bellSoundId || null
     };
     
@@ -248,15 +135,19 @@ function ManageSchedules({ onBack }) {
   };
 
   const handleSave = async () => {
-    if (!editingSchedule.name.trim()) {
-      alert('Please enter a schedule name');
+    const validation = validateSchedule(editingSchedule);
+    if (!validation.valid) {
+      alert(validation.error);
       return;
     }
 
-    if (editingSchedule.times.some(t => !t.time || !t.description)) {
-      alert('Please fill in all bell times and descriptions');
+    // ADDED: Validate bell sound is required
+    if (!editingSchedule.bellSoundId) {
+      alert('Please select a bell sound for this schedule');
       return;
     }
+
+    stopAudio();
 
     try {
       const scheduleToSave = {
@@ -308,12 +199,6 @@ function ManageSchedules({ onBack }) {
     });
   };
 
-  const getBellSoundName = (bellSoundId) => {
-    if (!bellSoundId) return 'Default Bell';
-    const sound = bellSounds.find(s => s.id === bellSoundId);
-    return sound ? sound.name : 'Default Bell';
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -356,9 +241,7 @@ function ManageSchedules({ onBack }) {
               {editingSchedule.id ? 'Edit Schedule' : 'Create New Schedule'}
             </h2>
 
-            {/* Schedule Name and Color - Two Column Layout */}
             <div className="mb-6 grid grid-cols-2 gap-6">
-              {/* Schedule Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Schedule Name *
@@ -372,7 +255,6 @@ function ManageSchedules({ onBack }) {
                 />
               </div>
 
-              {/* Color Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Schedule Color *
@@ -384,10 +266,9 @@ function ManageSchedules({ onBack }) {
               </div>
             </div>
 
-            {/* Bell Sound Selection */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Bell Sound
+                Bell Sound *
               </label>
               
               <BellSoundSelector
@@ -399,11 +280,10 @@ function ManageSchedules({ onBack }) {
               />
               
               <p className="text-xs text-gray-500 mt-2">
-                Select a custom bell sound or use the default. Click the play button to preview.
+                Select which bell sound to use for this schedule.
               </p>
             </div>
 
-            {/* Bell Times */}
             <div className="mb-6">
               <div className="flex items-center justify-between mb-3">
                 <label className="block text-sm font-medium text-gray-700">
@@ -432,7 +312,7 @@ function ManageSchedules({ onBack }) {
                       type="text"
                       value={bell.description}
                       onChange={(e) => updateBellTime(index, 'description', e.target.value)}
-                      placeholder="e.g., Class Start, Break, Lunch"
+                      placeholder="Description (optional)"
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     {editingSchedule.times.length > 1 && (
@@ -448,11 +328,11 @@ function ManageSchedules({ onBack }) {
               </div>
             </div>
 
-            {/* Action Buttons */}
             <div className="flex gap-3 pt-4 border-t">
               <button
                 onClick={handleSave}
-                className="flex-1 bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 font-medium"
+                disabled={!editingSchedule.bellSoundId}
+                className="flex-1 bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 font-medium"
               >
                 <Save size={18} />
                 Save Schedule
@@ -487,7 +367,7 @@ function ManageSchedules({ onBack }) {
                 const isCustom = scheduleColor.name === 'Custom';
                 const isNoBell = !schedule.times || schedule.times.length === 0;
                 const isSystem = schedule.isSystem || false;
-                const bellSoundName = getBellSoundName(schedule.bellSoundId);
+                const bellSoundName = getBellSoundName(schedule.bellSoundId, bellSounds);
                 
                 return (
                   <div

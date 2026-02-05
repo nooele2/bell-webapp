@@ -1,10 +1,13 @@
-const API_BASE_URL = 'http://localhost:5001/api';
+import { API_BASE_URL } from '../constants';
 
-// Helper function for API calls
+// ============================================================================
+// Core API Helper
+// ============================================================================
+
 const apiCall = async (endpoint, options = {}) => {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
-    credentials: 'include', // Important for auth cookies/sessions
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -19,115 +22,147 @@ const apiCall = async (endpoint, options = {}) => {
   return response.json();
 };
 
-// Default export for auth operations
-const api = {
-  get: (endpoint) => apiCall(endpoint, { method: 'GET' }),
-  post: (endpoint, data) => apiCall(endpoint, { 
-    method: 'POST', 
-    body: JSON.stringify(data) 
-  }),
+// ============================================================================
+// Authentication API
+// ============================================================================
+
+export const login = async (email, password) => {
+  return apiCall('/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
 };
 
-export default api;
+export const logout = async () => {
+  return apiCall('/logout', { method: 'POST' });
+};
 
-// Schedules
+export const checkAuth = async () => {
+  return apiCall('/check-auth', { method: 'GET' });
+};
+
+// ============================================================================
+// Schedules API
+// ============================================================================
+
 export const getSchedules = async () => {
-  const response = await fetch(`${API_BASE_URL}/schedules`, {
-    credentials: 'include',
-  });
-  if (!response.ok) throw new Error('Failed to fetch schedules');
-  return response.json();
+  return apiCall('/schedules', { method: 'GET' });
 };
 
 export const createSchedule = async (schedule) => {
-  const response = await fetch(`${API_BASE_URL}/schedules`, {
+  return apiCall('/schedules', {
     method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(schedule),
   });
-  if (!response.ok) throw new Error('Failed to create schedule');
-  return response.json();
 };
 
 export const updateSchedule = async (id, schedule) => {
-  const response = await fetch(`${API_BASE_URL}/schedules/${id}`, {
+  return apiCall(`/schedules/${id}`, {
     method: 'PUT',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(schedule),
   });
-  if (!response.ok) throw new Error('Failed to update schedule');
-  return response.json();
 };
 
 export const deleteSchedule = async (id) => {
-  const response = await fetch(`${API_BASE_URL}/schedules/${id}`, {
-    method: 'DELETE',
-    credentials: 'include',
-  });
-  if (!response.ok) throw new Error('Failed to delete schedule');
-  return response.json();
+  return apiCall(`/schedules/${id}`, { method: 'DELETE' });
 };
 
-// Assignments
+// ============================================================================
+// Assignments API
+// ============================================================================
+
 export const getAssignments = async () => {
-  const response = await fetch(`${API_BASE_URL}/assignments`, {
-    credentials: 'include',
-  });
-  if (!response.ok) throw new Error('Failed to fetch assignments');
-  return response.json();
+  return apiCall('/assignments', { method: 'GET' });
 };
 
 export const createAssignment = async (dates, scheduleId, description, customTimes = null, bellSoundId = null) => {
-  const response = await fetch(`${API_BASE_URL}/assignments`, {
+  return apiCall('/assignments', {
     method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 
-      dates, 
-      scheduleId, 
-      description, 
+    body: JSON.stringify({
+      dates,
+      scheduleId,
+      description,
       customTimes,
-      bellSoundId // Include bell sound ID
+      bellSoundId,
     }),
   });
-  
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to create assignment');
-  }
-  
-  return response.json();
 };
 
 export const updateAssignment = async (id, data) => {
-  const response = await fetch(`${API_BASE_URL}/assignments/${id}`, {
+  return apiCall(`/assignments/${id}`, {
     method: 'PUT',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       date: data.date,
       scheduleId: data.scheduleId,
       description: data.description,
       customTimes: data.customTimes,
-      bellSoundId: data.bellSoundId // Include bell sound ID
+      bellSoundId: data.bellSoundId,
     }),
+  });
+};
+
+export const deleteAssignment = async (id) => {
+  return apiCall(`/assignments/${id}`, { method: 'DELETE' });
+};
+
+// ============================================================================
+// Bell Sounds API
+// ============================================================================
+
+export const getBellSounds = async () => {
+  return apiCall('/bell-sounds', { method: 'GET' });
+};
+
+export const uploadBellSound = async (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const response = await fetch(`${API_BASE_URL}/bell-sounds`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
   });
   
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.error || 'Failed to update assignment');
+    throw new Error(error.error || 'Failed to upload bell sound');
   }
   
   return response.json();
 };
 
-export const deleteAssignment = async (id) => {
-  const response = await fetch(`${API_BASE_URL}/assignments/${id}`, {
-    method: 'DELETE',
-    credentials: 'include',
+export const getBellSoundUrl = (soundId) => {
+  return `${API_BASE_URL}/bell-sounds/${soundId}`;
+};
+
+export const updateBellSound = async (soundId, data) => {
+  return apiCall(`/bell-sounds/${soundId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
   });
-  if (!response.ok) throw new Error('Failed to delete assignment');
-  return response.json();
+};
+
+export const deleteBellSound = async (soundId) => {
+  return apiCall(`/bell-sounds/${soundId}`, { method: 'DELETE' });
+};
+
+// ============================================================================
+// Legacy API (for backward compatibility)
+// ============================================================================
+
+export const getScheduleTimes = async () => {
+  return apiCall('/schedule/times', { method: 'GET' });
+};
+
+export const healthCheck = async () => {
+  return apiCall('/health', { method: 'GET' });
+};
+
+// Default export for backward compatibility
+export default {
+  get: (endpoint) => apiCall(endpoint, { method: 'GET' }),
+  post: (endpoint, data) => apiCall(endpoint, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
 };
