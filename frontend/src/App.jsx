@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Dashboard from './pages/Dashboard';
-import Login from './pages/login';
+import Login from './pages/Login';
 import ManageSchedules from './pages/ManageSchedules';
 
 function AppContent() {
