@@ -7,7 +7,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'https://bell-webapp.onrender.com',
+        target: 'https://bell-web-app.onrender.com',
         changeOrigin: true,
       }
     }
