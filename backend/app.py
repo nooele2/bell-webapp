@@ -26,7 +26,11 @@ def index():
 
 # CORS Configuration
 CORS(app, 
-     origins=['http://localhost:5173', 'http://localhost:3000'],
+     origins=[
+         'http://localhost:5173', 
+         'http://localhost:3000',
+         'https://bell-webapp.vercel.app'
+     ],
      supports_credentials=True,
      allow_headers=['Content-Type', 'Authorization'],
      methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
