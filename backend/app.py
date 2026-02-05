@@ -24,7 +24,9 @@ def index():
         }
     })
 
-# CORS Configuration
+# ============================================================================
+# CORS Configuration - FIXED FOR PRODUCTION
+# ============================================================================
 CORS(app, 
      origins=[
          'http://localhost:5173', 
@@ -34,8 +36,7 @@ CORS(app,
      supports_credentials=True,
      allow_headers=['Content-Type', 'Authorization'],
      methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-     expose_headers=['Set-Cookie'],  # Add this
-     max_age=3600)
+     expose_headers=['Set-Cookie'])
 
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -54,16 +55,20 @@ USERS = {
     }
 }
 
-# Session config - UPDATE THIS SECTION
-app.config['SESSION_COOKIE_SAMESITE'] = 'None'  # Changed from 'Lax'
-app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SECURE'] = True  # Changed from False - Required for SameSite=None
-app.config['PERMANENT_SESSION_LIFETIME'] = 1800
-app.config['SESSION_COOKIE_DOMAIN'] = None  # This is OK
+# ============================================================================
+# Session Configuration - FIXED FOR CROSS-ORIGIN HTTPS
+# ============================================================================
+# Check if running in production (Render sets this)
+is_production = os.environ.get('RENDER') is not None or os.environ.get('FLASK_ENV') == 'production'
 
-# Add these new configs
+app.config['SESSION_COOKIE_SAMESITE'] = 'None'  # Required for cross-origin
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SECURE'] = is_production  # True in production (HTTPS required)
+app.config['PERMANENT_SESSION_LIFETIME'] = 1800
+app.config['SESSION_COOKIE_DOMAIN'] = None
 app.config['SESSION_COOKIE_PATH'] = '/'
-app.config['SESSION_TYPE'] = 'filesystem'  # or 'redis' for production
+
+print(f"🔧 Session config: SECURE={app.config['SESSION_COOKIE_SECURE']}, SAMESITE={app.config['SESSION_COOKIE_SAMESITE']}")
 
 # Default color presets
 DEFAULT_COLORS = {
@@ -343,6 +348,10 @@ def login():
         session['logged_in'] = True
         session['user'] = email
         session['name'] = user['name']
+        
+        print(f"✅ Login successful for {email}")
+        print(f"🍪 Session ID: {session.get('_id', 'N/A')}")
+        
         return jsonify({
             'success': True,
             'user': {
@@ -351,6 +360,7 @@ def login():
             }
         })
     else:
+        print(f"❌ Login failed for {email}")
         return jsonify({'error': 'Invalid email or password'}), 401
 
 @app.route('/api/logout', methods=['POST', 'OPTIONS'])
@@ -361,8 +371,13 @@ def logout():
     session.clear()
     return jsonify({'success': True})
 
-@app.route('/api/check-auth', methods=['GET'])
+@app.route('/api/check-auth', methods=['GET', 'OPTIONS'])
 def check_auth():
+    if request.method == 'OPTIONS':
+        return '', 200
+        
+    print(f"🔍 Check auth - Session data: {dict(session)}")
+    
     if 'logged_in' in session:
         return jsonify({
             'authenticated': True, 
@@ -371,6 +386,8 @@ def check_auth():
                 'name': session.get('name')
             }
         })
+    
+    print("❌ Not authenticated - no session")
     return jsonify({'authenticated': False}), 401
 
 # ============================================================================
@@ -734,9 +751,14 @@ def health():
     return jsonify({
         'status': 'ok', 
         'message': 'Bell Schedule API is running',
+        'session_config': {
+            'secure': app.config['SESSION_COOKIE_SECURE'],
+            'samesite': app.config['SESSION_COOKIE_SAMESITE'],
+            'httponly': app.config['SESSION_COOKIE_HTTPONLY']
+        },
         'public_urls': {
-            'ringtimes': f'http://localhost:5001/public/ringtimes',
-            'ringdates': f'http://localhost:5001/public/ringdates',
+            'ringtimes': f'https://bell-web-app.onrender.com/public/ringtimes',
+            'ringdates': f'https://bell-web-app.onrender.com/public/ringdates',
             'info': 'Bash script can read directly from these URLs'
         }
     })
@@ -748,10 +770,6 @@ def health():
 if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 5001))
-
-    is_production = os.environ.get('FLASK_ENV') == 'production'
-    
-    app.config['SESSION_COOKIE_SECURE'] = is_production 
     
     print()
     print("=" * 70)
@@ -759,12 +777,17 @@ if __name__ == '__main__':
     print("=" * 70)
     print()
     print("📍 PUBLIC URLs (for bash script to read):")
-    print(f"   Ringtimes: http://0.0.0.0:{port}/public/ringtimes")
-    print(f"   Ringdates: http://0.0.0.0:{port}/public/ringdates")
+    print(f"   Ringtimes: https://bell-web-app.onrender.com/public/ringtimes")
+    print(f"   Ringdates: https://bell-web-app.onrender.com/public/ringdates")
     print()
     print("🔗 API Endpoints:")
-    print(f"   Health: http://0.0.0.0:{port}/api/health")
-    print(f"   Login: http://0.0.0.0:{port}/api/login")
+    print(f"   Health: https://bell-web-app.onrender.com/api/health")
+    print(f"   Login: https://bell-web-app.onrender.com/api/login")
+    print()
+    print(f"🔧 Session Config:")
+    print(f"   SECURE: {app.config['SESSION_COOKIE_SECURE']}")
+    print(f"   SAMESITE: {app.config['SESSION_COOKIE_SAMESITE']}")
+    print(f"   Production Mode: {is_production}")
     print()
     print(f"✅ Backend running on port: {port}")
     print("=" * 70)
