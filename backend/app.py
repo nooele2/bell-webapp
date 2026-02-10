@@ -16,7 +16,7 @@ def index():
         'message': 'Bell Schedule API',
         'status': 'running',
         'endpoints': {
-            'health': '/api/health',
+            'bell': '/api/bell',
             'login': '/api/login',
             'schedules': '/api/schedules',
             'public_ringtimes': '/public/ringtimes',
@@ -746,8 +746,8 @@ def delete_bell_sound(sound_id):
 # STATUS ENDPOINT
 # ============================================================================
 
-@app.route('/api/health', methods=['GET'])
-def health():
+@app.route('/api/bell', methods=['GET'])
+def bell():
     return jsonify({
         'status': 'ok', 
         'message': 'Bell Schedule API is running',
@@ -781,7 +781,7 @@ if __name__ == '__main__':
     print(f"   Ringdates: https://bell-web-app.onrender.com/public/ringdates")
     print()
     print("🔗 API Endpoints:")
-    print(f"   Health: https://bell-web-app.onrender.com/api/health")
+    print(f"   Bell: https://bell-web-app.onrender.com/api/bell")
     print(f"   Login: https://bell-web-app.onrender.com/api/login")
     print()
     print(f"🔧 Session Config:")
