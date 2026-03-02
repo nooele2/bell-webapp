@@ -1,35 +1,67 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Volume2, Play, Pause, Search } from 'lucide-react';
+import { Volume2, Play, Pause, Search, RefreshCw } from 'lucide-react';
+import { useAudioPlayer, getGithubSoundUrl } from '../hooks/useAudioPlayer';
 
-export function BellSoundSelector({ 
-  bellSounds, 
-  selectedBellSoundId, 
-  onSelect, 
-  playingBellSoundId, 
-  onPlay 
-}) {
+const GITHUB_API_URL = 'https://api.github.com/repos/pepa65/piring/contents/soundfiles';
+const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.ogg', '.flac'];
+
+export function BellSoundSelector({ selectedBellSoundId, onSelect }) {
+  const [sounds, setSounds] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [fetched, setFetched] = useState(false);
   const dropdownRef = useRef(null);
 
+  const { playingId, togglePlay } = useAudioPlayer();
+
+  // Fetch sounds when dropdown first opens
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+    if (isDropdownOpen && !fetched) {
+      loadSounds();
+    }
+  }, [isDropdownOpen]);
+
+  // Close on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setIsDropdownOpen(false);
       }
     };
-
     if (isDropdownOpen) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [isDropdownOpen]);
 
-  const filteredSounds = bellSounds.filter(sound =>
-    sound.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const loadSounds = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(GITHUB_API_URL);
+      if (!res.ok) throw new Error('Failed to fetch');
+      const files = await res.json();
+      const audioFiles = files
+        .filter(f => AUDIO_EXTENSIONS.some(ext => f.name.toLowerCase().endsWith(ext)))
+        .map(f => ({
+          filename: f.name,
+          name: f.name.replace(/\.[^/.]+$/, ''),
+        }));
+      setSounds(audioFiles);
+      setFetched(true);
+    } catch (err) {
+      console.error('Failed to load sounds:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredSounds = sounds.filter(s =>
+    s.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const selectedSound = bellSounds.find(s => s.id === selectedBellSoundId);
+  const selectedSound = sounds.find(s => s.filename === selectedBellSoundId)
+    || (selectedBellSoundId ? { filename: selectedBellSoundId, name: selectedBellSoundId.replace(/\.[^/.]+$/, '') } : null);
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -44,34 +76,32 @@ export function BellSoundSelector({
             {selectedSound ? selectedSound.name : 'Select a bell sound *'}
           </span>
         </div>
-        
+
         <div className="flex items-center gap-2 flex-shrink-0">
           {selectedSound && (
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                onPlay(selectedSound.id);
+                togglePlay(selectedSound.filename);
               }}
               className={`p-2 rounded-full transition-colors ${
-                playingBellSoundId === selectedSound.id
+                playingId === selectedSound.filename
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
               }`}
               title="Preview sound"
             >
-              {playingBellSoundId === selectedSound.id ? (
+              {playingId === selectedSound.filename ? (
                 <Pause size={16} />
               ) : (
                 <Play size={16} className="ml-0.5" />
               )}
             </button>
           )}
-          <svg 
+          <svg
             className={`w-5 h-5 text-gray-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}
-            fill="none" 
-            stroke="currentColor" 
-            viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" viewBox="0 0 24 24"
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
@@ -96,53 +126,56 @@ export function BellSoundSelector({
           </div>
 
           <div className="overflow-y-auto flex-1">
-            {filteredSounds.length === 0 ? (
+            {loading ? (
+              <div className="p-8 text-center text-gray-500">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                <p className="text-sm">Loading sounds...</p>
+              </div>
+            ) : filteredSounds.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
                 <Volume2 size={32} className="mx-auto mb-2 text-gray-300" />
-                <p className="text-sm font-medium">No bell sounds found</p>
-                <p className="text-xs mt-1">Try a different search term</p>
+                <p className="text-sm font-medium">No sounds found</p>
               </div>
             ) : (
               filteredSounds.map((sound) => (
                 <button
-                  key={sound.id}
+                  key={sound.filename}
                   type="button"
                   onClick={() => {
-                    onSelect(sound.id);
+                    onSelect(sound.filename);
                     setIsDropdownOpen(false);
                     setSearchQuery('');
                   }}
                   className={`w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors border-b border-gray-100 ${
-                    selectedBellSoundId === sound.id ? 'bg-blue-50' : ''
+                    selectedBellSoundId === sound.filename ? 'bg-blue-50' : ''
                   }`}
                 >
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <Volume2 size={18} className="text-gray-400 flex-shrink-0" />
                     <span className="font-medium text-gray-900 truncate">{sound.name}</span>
                   </div>
-                  
+
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onPlay(sound.id);
+                        togglePlay(sound.filename);
                       }}
                       className={`p-2 rounded-full transition-colors ${
-                        playingBellSoundId === sound.id
+                        playingId === sound.filename
                           ? 'bg-blue-600 text-white'
                           : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
                       }`}
-                      title="Preview sound"
                     >
-                      {playingBellSoundId === sound.id ? (
+                      {playingId === sound.filename ? (
                         <Pause size={14} />
                       ) : (
                         <Play size={14} className="ml-0.5" />
                       )}
                     </button>
-                    
-                    {selectedBellSoundId === sound.id && (
+
+                    {selectedBellSoundId === sound.filename && (
                       <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center">
                         <div className="w-2 h-2 rounded-full bg-white"></div>
                       </div>
@@ -154,16 +187,8 @@ export function BellSoundSelector({
           </div>
 
           <div className="p-2 border-t border-gray-200 bg-gray-50">
-            <p className="text-xs text-gray-600 text-center">
-              {searchQuery ? (
-                <>
-                  {filteredSounds.length} of {bellSounds.length} sound{bellSounds.length !== 1 ? 's' : ''}
-                </>
-              ) : (
-                <>
-                  {bellSounds.length} bell sound{bellSounds.length !== 1 ? 's' : ''} available
-                </>
-              )}
+            <p className="text-xs text-gray-500 text-center">
+              {filteredSounds.length} of {sounds.length} sounds • github.com/pepa65/piring
             </p>
           </div>
         </div>

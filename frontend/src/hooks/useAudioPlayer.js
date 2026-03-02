@@ -1,9 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { getBellSoundUrl } from '../services/api';
+
+const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/pepa65/piring/master/soundfiles';
+
+export function getGithubSoundUrl(filename) {
+  return `${GITHUB_RAW_BASE}/${filename}`;
+}
 
 /**
  * Custom hook for managing audio playback
- * Handles play/pause, cleanup, and state management
+ * Plays sounds directly from GitHub raw URLs
  */
 export function useAudioPlayer() {
   const [playingId, setPlayingId] = useState(null);
@@ -19,9 +24,9 @@ export function useAudioPlayer() {
     };
   }, []);
 
-  const togglePlay = useCallback((soundId) => {
+  const togglePlay = useCallback((filename) => {
     // If clicking the same sound that's playing, stop it
-    if (playingId === soundId && audioRef.current) {
+    if (playingId === filename && audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
       audioRef.current = null;
@@ -36,19 +41,20 @@ export function useAudioPlayer() {
     }
 
     try {
-      const audio = new Audio(getBellSoundUrl(soundId));
+      const url = getGithubSoundUrl(filename);
+      const audio = new Audio(url);
       audioRef.current = audio;
-      
+
       audio.play();
-      setPlayingId(soundId);
-      
+      setPlayingId(filename);
+
       audio.onended = () => {
         setPlayingId(null);
         audioRef.current = null;
       };
 
       audio.onerror = () => {
-        console.error('Error playing audio');
+        console.error('Error playing audio:', filename);
         setPlayingId(null);
         audioRef.current = null;
         alert('Failed to play audio');
@@ -74,7 +80,7 @@ export function useAudioPlayer() {
     playingId,
     togglePlay,
     stopAudio,
-    isPlaying: (id) => playingId === id,
+    isPlaying: (filename) => playingId === filename,
   };
 }
 

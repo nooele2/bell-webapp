@@ -1,31 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Plus, Clock, Edit2, Trash2, Save, X, Star, BellOff, Volume2, Palette } from 'lucide-react';
-import { getBellSounds, getBellSoundUrl, getSchedules, createSchedule, updateSchedule, deleteSchedule } from '../services/api';
+import { getSchedules, createSchedule, updateSchedule, deleteSchedule } from '../services/api';
 import BellSoundSelector from '../components/Bellsoundselector';
 import ColorPicker from '../components/Colorpicker';
 import { SYSTEM_NO_BELL_SCHEDULE, COLOR_PRESETS } from '../constants';
-import { useAudioPlayer } from '../hooks/useAudioPlayer';
-import { getBellSoundName, canDeleteSchedule, canSetAsDefault, validateSchedule } from '../utils/scheduleUtils';
+import { canDeleteSchedule, canSetAsDefault, validateSchedule } from '../utils/scheduleUtils';
+
+// Since bell sounds are now GitHub filenames, just strip the extension for display
+const getBellSoundName = (bellSoundId) => {
+  if (!bellSoundId) return 'None selected';
+  return bellSoundId.replace(/\.[^/.]+$/, '');
+};
 
 function ManageSchedules({ onBack }) {
   const [schedules, setSchedules] = useState([]);
-  const [bellSounds, setBellSounds] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState(null);
   const [loading, setLoading] = useState(true);
-  
-  const { playingId: playingBellSoundId, togglePlay: handlePlayBellSound, stopAudio } = useAudioPlayer();
 
   useEffect(() => {
     loadSchedules();
-    loadBellSounds();
   }, []);
-
-  useEffect(() => {
-    return () => {
-      stopAudio();
-    };
-  }, [stopAudio]);
 
   const loadSchedules = async () => {
     try {
@@ -37,15 +32,6 @@ function ManageSchedules({ onBack }) {
       setSchedules([SYSTEM_NO_BELL_SCHEDULE]);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadBellSounds = async () => {
-    try {
-      const sounds = await getBellSounds();
-      setBellSounds(sounds);
-    } catch (error) {
-      console.error('Error loading bell sounds:', error);
     }
   };
 
@@ -67,30 +53,24 @@ function ManageSchedules({ onBack }) {
       alert('System schedules cannot be edited.');
       return;
     }
-    
-    const scheduleWithColor = {
+    setEditingSchedule({
       ...schedule,
       color: schedule.color || COLOR_PRESETS[0],
       bellSoundId: schedule.bellSoundId || null
-    };
-    
-    setEditingSchedule(scheduleWithColor);
+    });
     setIsEditing(true);
   };
 
   const handleDelete = async (scheduleId) => {
     const scheduleToDelete = schedules.find(s => s.id === scheduleId);
-    
     if (scheduleToDelete?.isSystem) {
       alert('System schedules cannot be deleted.');
       return;
     }
-
     if (scheduleToDelete?.isDefault) {
       alert('Cannot delete the default schedule. Please set another schedule as default first.');
       return;
     }
-
     if (window.confirm('Are you sure you want to delete this schedule?')) {
       try {
         await deleteSchedule(scheduleId);
@@ -104,28 +84,21 @@ function ManageSchedules({ onBack }) {
 
   const handleMakeDefault = async (scheduleId) => {
     const schedule = schedules.find(s => s.id === scheduleId);
-    
     if (schedule?.isSystem) {
-      alert('The "No Bell" system schedule cannot be set as the default schedule. Please choose a regular schedule with bell times.');
+      alert('The "No Bell" system schedule cannot be set as the default schedule.');
       return;
     }
-
-    if (window.confirm('Set this schedule as the default for all weekdays? This will apply to all dates that don\'t have a specific schedule assigned.')) {
+    if (window.confirm('Set this schedule as the default for all weekdays?')) {
       try {
-        const updatedSchedules = schedules.map(s => {
-          if (s.isSystem) return s;
-          return {
-            ...s,
-            isDefault: s.id === scheduleId
-          };
-        });
-
-        for (const schedule of updatedSchedules) {
-          if (!schedule.isSystem) {
-            await updateSchedule(schedule.id, schedule);
+        const updatedSchedules = schedules.map(s => ({
+          ...s,
+          isDefault: s.isSystem ? s.isDefault : s.id === scheduleId
+        }));
+        for (const s of updatedSchedules) {
+          if (!s.isSystem) {
+            await updateSchedule(s.id, s);
           }
         }
-
         setSchedules(updatedSchedules);
       } catch (error) {
         console.error('Error setting default schedule:', error);
@@ -140,21 +113,13 @@ function ManageSchedules({ onBack }) {
       alert(validation.error);
       return;
     }
-
-    // ADDED: Validate bell sound is required
     if (!editingSchedule.bellSoundId) {
       alert('Please select a bell sound for this schedule');
       return;
     }
 
-    stopAudio();
-
     try {
-      const scheduleToSave = {
-        ...editingSchedule,
-        mode: editingSchedule.name
-      };
-
+      const scheduleToSave = { ...editingSchedule, mode: editingSchedule.name };
       if (editingSchedule.id) {
         const savedSchedule = await updateSchedule(editingSchedule.id, scheduleToSave);
         setSchedules(schedules.map(s => s.id === editingSchedule.id ? savedSchedule : s));
@@ -162,7 +127,6 @@ function ManageSchedules({ onBack }) {
         const savedSchedule = await createSchedule(scheduleToSave);
         setSchedules([...schedules, savedSchedule]);
       }
-      
       setIsEditing(false);
       setEditingSchedule(null);
     } catch (error) {
@@ -193,10 +157,7 @@ function ManageSchedules({ onBack }) {
   const updateBellTime = (index, field, value) => {
     const newTimes = [...editingSchedule.times];
     newTimes[index][field] = value;
-    setEditingSchedule({
-      ...editingSchedule,
-      times: newTimes
-    });
+    setEditingSchedule({ ...editingSchedule, times: newTimes });
   };
 
   if (loading) {
@@ -213,10 +174,7 @@ function ManageSchedules({ onBack }) {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <button
-                onClick={onBack}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
+              <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                 <ArrowLeft size={20} />
               </button>
               <h1 className="text-2xl font-bold text-gray-900">Manage Schedules</h1>
@@ -270,15 +228,10 @@ function ManageSchedules({ onBack }) {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Bell Sound *
               </label>
-              
               <BellSoundSelector
-                bellSounds={bellSounds}
                 selectedBellSoundId={editingSchedule.bellSoundId}
                 onSelect={(soundId) => setEditingSchedule({ ...editingSchedule, bellSoundId: soundId })}
-                playingBellSoundId={playingBellSoundId}
-                onPlay={handlePlayBellSound}
               />
-              
               <p className="text-xs text-gray-500 mt-2">
                 Select which bell sound to use for this schedule.
               </p>
@@ -286,9 +239,7 @@ function ManageSchedules({ onBack }) {
 
             <div className="mb-6">
               <div className="flex items-center justify-between mb-3">
-                <label className="block text-sm font-medium text-gray-700">
-                  Bell Times *
-                </label>
+                <label className="block text-sm font-medium text-gray-700">Bell Times *</label>
                 <button
                   onClick={addBellTime}
                   className="text-blue-600 hover:text-blue-700 text-sm flex items-center gap-1"
@@ -316,10 +267,7 @@ function ManageSchedules({ onBack }) {
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     {editingSchedule.times.length > 1 && (
-                      <button
-                        onClick={() => removeBellTime(index)}
-                        className="text-red-600 hover:text-red-700 p-2"
-                      >
+                      <button onClick={() => removeBellTime(index)} className="text-red-600 hover:text-red-700 p-2">
                         <Trash2 size={18} />
                       </button>
                     )}
@@ -352,7 +300,7 @@ function ManageSchedules({ onBack }) {
               <div className="bg-white rounded-lg shadow-md p-12 text-center">
                 <Clock size={48} className="mx-auto text-gray-400 mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No custom schedules yet</h3>
-                <p className="text-gray-600 mb-4">The system "No Bell" schedule is available. Create your first custom schedule to get started.</p>
+                <p className="text-gray-600 mb-4">Create your first custom schedule to get started.</p>
                 <button
                   onClick={handleAddNew}
                   className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
@@ -367,36 +315,26 @@ function ManageSchedules({ onBack }) {
                 const isCustom = scheduleColor.name === 'Custom';
                 const isNoBell = !schedule.times || schedule.times.length === 0;
                 const isSystem = schedule.isSystem || false;
-                const bellSoundName = getBellSoundName(schedule.bellSoundId, bellSounds);
-                
+
                 return (
                   <div
                     key={schedule.id}
-                    className={`bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow ${
-                      isSystem ? 'border-2 border-gray-300' : ''
-                    }`}
+                    className={`bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow ${isSystem ? 'border-2 border-gray-300' : ''}`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-3">
                           <div
                             className="w-6 h-6 rounded-full flex items-center justify-center"
-                            style={{
-                              backgroundColor: scheduleColor.value
-                            }}
+                            style={{ backgroundColor: scheduleColor.value }}
                           >
-                            {isNoBell && (
-                              <BellOff size={14} style={{ color: scheduleColor.text }} />
-                            )}
+                            {isNoBell && <BellOff size={14} style={{ color: scheduleColor.text }} />}
                           </div>
                           <h3 className="text-xl font-semibold text-gray-900">{schedule.name}</h3>
                           {schedule.isDefault && (
                             <span
                               className="inline-flex items-center gap-1 text-xs px-3 py-1 rounded-full font-medium"
-                              style={{
-                                backgroundColor: scheduleColor.value,
-                                color: scheduleColor.text
-                              }}
+                              style={{ backgroundColor: scheduleColor.value, color: scheduleColor.text }}
                             >
                               <Star size={14} fill="currentColor" />
                               Default Schedule
@@ -414,10 +352,7 @@ function ManageSchedules({ onBack }) {
                           </span>
                           <span
                             className="text-xs px-2 py-1 rounded flex items-center gap-1"
-                            style={{
-                              backgroundColor: scheduleColor.value,
-                              color: scheduleColor.text
-                            }}
+                            style={{ backgroundColor: scheduleColor.value, color: scheduleColor.text }}
                           >
                             {isCustom && <Palette size={12} />}
                             {isCustom ? 'Custom Color' : scheduleColor.name}
@@ -425,7 +360,7 @@ function ManageSchedules({ onBack }) {
                           {!isNoBell && (
                             <span className="text-xs px-2 py-1 rounded flex items-center gap-1 bg-gray-100 text-gray-700">
                               <Volume2 size={12} />
-                              {bellSoundName}
+                              {getBellSoundName(schedule.bellSoundId)}
                             </span>
                           )}
                         </div>
@@ -435,7 +370,6 @@ function ManageSchedules({ onBack }) {
                           <button
                             onClick={() => handleMakeDefault(schedule.id)}
                             className="px-4 py-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors flex items-center gap-2 font-medium"
-                            title="Make default schedule"
                           >
                             <Star size={18} />
                             Make Default
@@ -446,20 +380,14 @@ function ManageSchedules({ onBack }) {
                             <button
                               onClick={() => handleEdit(schedule)}
                               className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-2 font-medium"
-                              title="Edit schedule"
                             >
                               <Edit2 size={18} />
                               Edit
                             </button>
                             <button
                               onClick={() => handleDelete(schedule.id)}
-                              className={`p-2 rounded-lg transition-colors ${
-                                schedule.isDefault
-                                  ? 'text-gray-400 cursor-not-allowed'
-                                  : 'text-red-600 hover:bg-red-50'
-                              }`}
-                              title={schedule.isDefault ? 'Cannot delete default schedule' : 'Delete schedule'}
                               disabled={schedule.isDefault}
+                              className={`p-2 rounded-lg transition-colors ${schedule.isDefault ? 'text-gray-400 cursor-not-allowed' : 'text-red-600 hover:bg-red-50'}`}
                             >
                               <Trash2 size={18} />
                             </button>

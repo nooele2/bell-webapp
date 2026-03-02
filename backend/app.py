@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, session, send_file, Response
+from flask import Flask, request, jsonify, session, Response
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
@@ -7,7 +7,8 @@ import json
 import psycopg2
 import psycopg2.extras
 from datetime import datetime
-from io import BytesIO
+from dotenv import load_dotenv
+load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-in-production')
@@ -29,9 +30,9 @@ def index():
 # ============================================================================
 # CORS Configuration
 # ============================================================================
-CORS(app, 
+CORS(app,
      origins=[
-         'http://localhost:5173', 
+         'http://localhost:5173',
          'http://localhost:3000',
          'https://bell-webapp.vercel.app'
      ],
@@ -141,16 +142,6 @@ def row_to_assignment(row):
     if row.get('bell_sound_id'):
         a['bellSoundId'] = row['bell_sound_id']
     return a
-
-def row_to_sound(row):
-    return {
-        'id': row['id'],
-        'name': row['name'],
-        'fileName': row['file_name'],
-        'savedFileName': row['saved_file_name'],
-        'size': row['size'],
-        'uploadedAt': row['uploaded_at']
-    }
 
 # ============================================================================
 # PUBLIC URL ENDPOINTS
@@ -483,127 +474,6 @@ def delete_assignment(assignment_id):
     conn.close()
     print(f"🔔 Assignment deleted!")
     return jsonify({'success': True})
-
-# ============================================================================
-# BELL SOUNDS API
-# ============================================================================
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, 'data')
-BELL_SOUNDS_DIR = os.path.join(DATA_DIR, 'bell_sounds')
-os.makedirs(BELL_SOUNDS_DIR, exist_ok=True)
-
-@app.route('/api/bell-sounds', methods=['GET'])
-@login_required
-def get_bell_sounds():
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM bell_sounds ORDER BY uploaded_at DESC")
-    sounds = [row_to_sound(r) for r in cur.fetchall()]
-    cur.close()
-    conn.close()
-    return jsonify(sounds)
-
-@app.route('/api/bell-sounds', methods=['POST'])
-@login_required
-def upload_bell_sound():
-    try:
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file provided'}), 400
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
-
-        allowed_extensions = {'mp3', 'wav', 'ogg', 'm4a', 'aac'}
-        file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
-        if file_ext not in allowed_extensions:
-            return jsonify({'error': 'Invalid file type. Allowed: MP3, WAV, OGG, M4A, AAC'}), 400
-
-        timestamp = int(datetime.now().timestamp() * 1000)
-        safe_filename = f"{timestamp}_{file.filename}"
-        file_path = os.path.join(BELL_SOUNDS_DIR, safe_filename)
-        file.save(file_path)
-        file_size = os.path.getsize(file_path)
-
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO bell_sounds (id, name, file_name, saved_file_name, size, uploaded_at)
-            VALUES (%s, %s, %s, %s, %s, %s) RETURNING *
-        """, (
-            str(timestamp), file.filename.rsplit('.', 1)[0],
-            file.filename, safe_filename, file_size, datetime.now().isoformat()
-        ))
-        row = cur.fetchone()
-        conn.commit()
-        cur.close()
-        conn.close()
-        return jsonify(row_to_sound(row)), 201
-    except Exception as e:
-        print(f"Error uploading bell sound: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/bell-sounds/<sound_id>', methods=['GET'])
-@login_required
-def get_bell_sound_file(sound_id):
-    try:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM bell_sounds WHERE id=%s", (sound_id,))
-        row = cur.fetchone()
-        cur.close()
-        conn.close()
-        if not row:
-            return jsonify({'error': 'Sound not found'}), 404
-        file_path = os.path.join(BELL_SOUNDS_DIR, row['saved_file_name'])
-        if not os.path.exists(file_path):
-            return jsonify({'error': 'File not found'}), 404
-        return send_file(file_path, mimetype='audio/mpeg')
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/bell-sounds/<sound_id>', methods=['PUT'])
-@login_required
-def update_bell_sound(sound_id):
-    try:
-        data = request.json
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("UPDATE bell_sounds SET name=%s WHERE id=%s RETURNING *", (data.get('name'), sound_id))
-        row = cur.fetchone()
-        conn.commit()
-        cur.close()
-        conn.close()
-        if not row:
-            return jsonify({'error': 'Sound not found'}), 404
-        return jsonify(row_to_sound(row))
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/bell-sounds/<sound_id>', methods=['DELETE'])
-@login_required
-def delete_bell_sound(sound_id):
-    try:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM bell_sounds WHERE id=%s", (sound_id,))
-        row = cur.fetchone()
-        if not row:
-            cur.close()
-            conn.close()
-            return jsonify({'error': 'Sound not found'}), 404
-        cur.execute("UPDATE schedules SET bell_sound_id=NULL WHERE bell_sound_id=%s", (sound_id,))
-        cur.execute("UPDATE assignments SET bell_sound_id=NULL WHERE bell_sound_id=%s", (sound_id,))
-        cur.execute("DELETE FROM bell_sounds WHERE id=%s", (sound_id,))
-        conn.commit()
-        cur.close()
-        conn.close()
-        file_path = os.path.join(BELL_SOUNDS_DIR, row['saved_file_name'])
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 # ============================================================================
 # STATUS ENDPOINT

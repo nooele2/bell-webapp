@@ -106,47 +106,6 @@ export const deleteAssignment = async (id) => {
 };
 
 // ============================================================================
-// Bell Sounds API
-// ============================================================================
-
-export const getBellSounds = async () => {
-  return apiCall('/bell-sounds', { method: 'GET' });
-};
-
-export const uploadBellSound = async (file) => {
-  const formData = new FormData();
-  formData.append('file', file);
-  
-  const response = await fetch(`${API_BASE_URL}/bell-sounds`, {
-    method: 'POST',
-    credentials: 'include',
-    body: formData,
-  });
-  
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to upload bell sound');
-  }
-  
-  return response.json();
-};
-
-export const getBellSoundUrl = (soundId) => {
-  return `${API_BASE_URL}/bell-sounds/${soundId}`;
-};
-
-export const updateBellSound = async (soundId, data) => {
-  return apiCall(`/bell-sounds/${soundId}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  });
-};
-
-export const deleteBellSound = async (soundId) => {
-  return apiCall(`/bell-sounds/${soundId}`, { method: 'DELETE' });
-};
-
-// ============================================================================
 // Legacy API (for backward compatibility)
 // ============================================================================
 

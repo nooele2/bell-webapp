@@ -1,124 +1,49 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Upload, Play, Pause, Trash2, Volume2, Search, X, Edit2, Check } from 'lucide-react';
-import { getBellSounds, uploadBellSound, getBellSoundUrl, updateBellSound, deleteBellSound } from '../services/api';
-import { useAudioPlayer } from '../hooks/useAudioPlayer';
-import { AUDIO_UPLOAD_CONSTRAINTS } from '../constants';
-import { formatFileSize } from '../utils/scheduleUtils';
+import { ArrowLeft, Play, Pause, Volume2, Search, RefreshCw } from 'lucide-react';
+import { useAudioPlayer, getGithubSoundUrl } from '../hooks/useAudioPlayer';
+
+const GITHUB_API_URL = 'https://api.github.com/repos/pepa65/piring/contents/soundfiles';
+const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.ogg', '.flac'];
 
 function AddBellSound({ onBack }) {
-  const [bellSounds, setBellSounds] = useState([]);
+  const [sounds, setSounds] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [editName, setEditName] = useState('');
   const [loading, setLoading] = useState(true);
-  
-  const { playingId, togglePlay: handlePlay, stopAudio } = useAudioPlayer();
+  const [error, setError] = useState(null);
+
+  const { playingId, togglePlay } = useAudioPlayer();
 
   useEffect(() => {
-    loadBellSounds();
+    loadSounds();
   }, []);
 
-  const loadBellSounds = async () => {
+  const loadSounds = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const sounds = await getBellSounds();
-      setBellSounds(sounds);
-    } catch (error) {
-      console.error('Failed to load bell sounds:', error);
-      alert('Failed to load bell sounds');
+      const res = await fetch(GITHUB_API_URL);
+      if (!res.ok) throw new Error('Failed to fetch from GitHub');
+      const files = await res.json();
+      const audioFiles = files
+        .filter(f => AUDIO_EXTENSIONS.some(ext => f.name.toLowerCase().endsWith(ext)))
+        .map(f => ({
+          filename: f.name,
+          name: f.name.replace(/\.[^/.]+$/, ''), // strip extension
+          url: getGithubSoundUrl(f.name),
+          size: f.size,
+        }));
+      setSounds(audioFiles);
+    } catch (err) {
+      console.error('Failed to load sounds:', err);
+      setError('Failed to load sounds from GitHub. Check your internet connection.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('audio/')) {
-      alert('Please upload an audio file (MP3, WAV, OGG, M4A)');
-      return;
-    }
-
-    if (file.size > AUDIO_UPLOAD_CONSTRAINTS.maxSizeBytes) {
-      alert(`File size must be less than ${AUDIO_UPLOAD_CONSTRAINTS.maxSizeMB}MB. Your file is ${(file.size / (1024 * 1024)).toFixed(2)}MB`);
-      return;
-    }
-
-    setUploading(true);
-
-    try {
-      await uploadBellSound(file);
-      await loadBellSounds();
-      setShowUploadModal(false);
-      alert('Bell sound uploaded successfully!');
-    } catch (error) {
-      console.error('Upload error:', error);
-      alert('Failed to upload: ' + error.message);
-    } finally {
-      setUploading(false);
-    }
-
-    e.target.value = '';
-  };
-
-  const handleStartEdit = (sound) => {
-    setEditingId(sound.id);
-    setEditName(sound.name);
-  };
-
-  const handleCancelEdit = () => {
-    setEditingId(null);
-    setEditName('');
-  };
-
-  const handleSaveEdit = async (id) => {
-    if (!editName.trim()) {
-      alert('Name cannot be empty');
-      return;
-    }
-
-    try {
-      await updateBellSound(id, { name: editName.trim() });
-      await loadBellSounds();
-      setEditingId(null);
-      setEditName('');
-    } catch (error) {
-      console.error('Failed to update:', error);
-      alert('Failed to update bell sound name');
-    }
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this bell sound?')) {
-      return;
-    }
-
-    if (playingId === id) {
-      stopAudio();
-    }
-
-    try {
-      await deleteBellSound(id);
-      await loadBellSounds();
-    } catch (error) {
-      console.error('Failed to delete:', error);
-      alert('Failed to delete bell sound');
-    }
-  };
-
-  const filteredSounds = bellSounds.filter(sound =>
-    sound.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredSounds = sounds.filter(s =>
+    s.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600">Loading bell sounds...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -152,116 +77,67 @@ function AddBellSound({ onBack }) {
             />
           </div>
           <button
-            onClick={() => setShowUploadModal(true)}
-            className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition-colors"
-            title="Upload Bell Sound"
+            onClick={loadSounds}
+            disabled={loading}
+            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+            title="Refresh"
           >
-            <Upload size={20} />
+            <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border">
-          <div className="p-4 border-b bg-gray-50">
+          <div className="p-4 border-b bg-gray-50 flex items-center justify-between">
             <h3 className="font-semibold text-gray-900">
-              Bell Sounds ({filteredSounds.length})
+              {loading ? 'Loading...' : `Bell Sounds (${filteredSounds.length})`}
             </h3>
+            <span className="text-xs text-gray-500">Source: github.com/pepa65/piring</span>
           </div>
-          
-          {filteredSounds.length === 0 ? (
+
+          {loading ? (
+            <div className="p-12 text-center">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-500">Loading sounds from GitHub...</p>
+            </div>
+          ) : error ? (
+            <div className="p-12 text-center text-red-500">
+              <p className="mb-4">{error}</p>
+              <button
+                onClick={loadSounds}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Try Again
+              </button>
+            </div>
+          ) : filteredSounds.length === 0 ? (
             <div className="p-12 text-center text-gray-500">
               <Volume2 size={48} className="mx-auto mb-4 text-gray-300" />
-              <p className="text-lg font-medium mb-2">No bell sounds yet</p>
-              <p className="text-sm">Click the upload button to add your first bell sound</p>
+              <p className="text-lg font-medium">No sounds found</p>
             </div>
           ) : (
             <div className="divide-y">
               {filteredSounds.map((sound) => (
-                <div
-                  key={sound.id}
-                  className="p-4 hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1 min-w-0">
-                      <button
-                        onClick={() => handlePlay(sound.id)}
-                        className={`p-2 rounded-full transition-colors flex-shrink-0 ${
-                          playingId === sound.id
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                      >
-                        {playingId === sound.id ? (
-                          <Pause size={18} />
-                        ) : (
-                          <Play size={18} className="ml-0.5" />
-                        )}
-                      </button>
-                      
-                      <div className="flex-1 min-w-0">
-                        {editingId === sound.id ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={editName}
-                              onChange={(e) => setEditName(e.target.value)}
-                              className="px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1"
-                              autoFocus
-                              onKeyPress={(e) => {
-                                if (e.key === 'Enter') {
-                                  handleSaveEdit(sound.id);
-                                }
-                              }}
-                            />
-                            <button
-                              onClick={() => handleSaveEdit(sound.id)}
-                              className="p-1 text-green-600 hover:bg-green-50 rounded transition-colors"
-                              title="Save"
-                            >
-                              <Check size={18} />
-                            </button>
-                            <button
-                              onClick={handleCancelEdit}
-                              className="p-1 text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                              title="Cancel"
-                            >
-                              <X size={18} />
-                            </button>
-                          </div>
-                        ) : (
-                          <>
-                            <h4 className="font-medium text-gray-900 truncate">
-                              {sound.name}
-                            </h4>
-                            <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
-                              <span>{sound.fileName}</span>
-                              <span>•</span>
-                              <span>{formatFileSize(sound.size)}</span>
-                              <span>•</span>
-                              <span>{new Date(sound.uploadedAt).toLocaleDateString()}</span>
-                            </div>
-                          </>
-                        )}
-                      </div>
+                <div key={sound.filename} className="p-4 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => togglePlay(sound.filename)}
+                      className={`p-2 rounded-full transition-colors flex-shrink-0 ${
+                        playingId === sound.filename
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {playingId === sound.filename ? (
+                        <Pause size={18} />
+                      ) : (
+                        <Play size={18} className="ml-0.5" />
+                      )}
+                    </button>
+
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium text-gray-900 truncate">{sound.name}</h4>
+                      <p className="text-sm text-gray-500 mt-0.5">{sound.filename}</p>
                     </div>
-                    
-                    {editingId !== sound.id && (
-                      <div className="flex items-center gap-2 ml-4">
-                        <button
-                          onClick={() => handleStartEdit(sound)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Edit name"
-                        >
-                          <Edit2 size={18} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(sound.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    )}
                   </div>
                 </div>
               ))}
@@ -269,55 +145,6 @@ function AddBellSound({ onBack }) {
           )}
         </div>
       </div>
-
-      {showUploadModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="text-lg font-semibold text-gray-900">Upload Bell Sound</h3>
-              <button
-                onClick={() => setShowUploadModal(false)}
-                disabled={uploading}
-                className="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="p-6">
-              {uploading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-600">Uploading...</p>
-                </div>
-              ) : (
-                <>
-                  <label className="block w-full cursor-pointer">
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors">
-                      <Upload size={48} className="mx-auto text-gray-400 mb-4" />
-                      <p className="text-gray-700 font-medium mb-2">Click to upload</p>
-                      <p className="text-sm text-gray-500">or drag and drop</p>
-                    </div>
-                    <input
-                      type="file"
-                      accept="audio/*"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                      disabled={uploading}
-                    />
-                  </label>
-                  
-                  <div className="mt-4 text-sm text-gray-500">
-                    <p className="font-medium text-gray-700 mb-1">Supported formats:</p>
-                    <p>MP3, WAV, OGG, M4A, AAC</p>
-                    <p className="mt-2 text-xs">Maximum file size: {AUDIO_UPLOAD_CONSTRAINTS.maxSizeMB}MB</p>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
