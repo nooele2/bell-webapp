@@ -2,10 +2,10 @@
   {
     "bellSoundId": "1768897040869",
     "color": {
-      "name": "Purple",
-      "value": "#e9d5ff",
-      "border": "#a855f7",
-      "text": "#5b21b6"
+      "border": "#3b82f6",
+      "name": "Blue",
+      "text": "#1e3a8a",
+      "value": "#dbeafe"
     },
     "id": "1767932229426",
     "isDefault": false,
@@ -13,33 +13,85 @@
     "name": "Late",
     "times": [
       {
-        "description": "B",
-        "time": "08:00"
+        "description": "First Bell",
+        "time": "08:55"
       },
       {
-        "description": "q",
-        "time": "09:57"
+        "time": "09:00",
+        "description": "1st start"
       },
       {
-        "description": "w",
-        "time": "09:57"
+        "time": "09:40",
+        "description": "1st end"
       },
       {
-        "description": "d",
-        "time": "09:59"
+        "time": "09:45",
+        "description": "2nd start"
       },
       {
-        "description": "f",
-        "time": "09:00"
+        "time": "10:25",
+        "description": "2nd end"
       },
       {
-        "description": "",
-        "time": "09:04"
+        "time": "10:30",
+        "description": "break"
+      },
+      {
+        "time": "10:35",
+        "description": "3rd start"
+      },
+      {
+        "time": "11:15",
+        "description": "3rd end"
+      },
+      {
+        "time": "11:20",
+        "description": "4th start"
+      },
+      {
+        "time": "12:00",
+        "description": "4th end"
+      },
+      {
+        "time": "12:40",
+        "description": "lunch"
+      },
+      {
+        "time": "12:45",
+        "description": "5th start"
+      },
+      {
+        "time": "13:25",
+        "description": "5th end"
+      },
+      {
+        "time": "13:30",
+        "description": "6th start"
+      },
+      {
+        "time": "14:10",
+        "description": "6th end"
+      },
+      {
+        "time": "14:15",
+        "description": "7th start"
+      },
+      {
+        "time": "14:55",
+        "description": "7th end"
+      },
+      {
+        "time": "15:00",
+        "description": "8th start"
+      },
+      {
+        "time": "15:40",
+        "description": "8th end"
       }
     ]
   },
   {
-    "bellSoundId": null,
+    "bellSoundId": "1768897040869",
     "color": {
       "border": "#fbbf24",
       "name": "Yellow",
@@ -52,119 +104,92 @@
     "name": "Normal",
     "times": [
       {
-        "description": "A",
-        "time": "07:00"
-      }
-    ]
-  },
-  {
-    "bellSoundId": "1768897040869",
-    "color": {
-      "border": "#ef4444",
-      "name": "Red",
-      "text": "#7f1d1d",
-      "value": "#fecaca"
-    },
-    "id": "1768812033294",
-    "isDefault": false,
-    "mode": "Buddy",
-    "name": "Buddy",
-    "times": [
+        "description": "First Bell",
+        "time": "07:55"
+      },
       {
-        "description": "bud",
+        "description": "1st start",
+        "time": "08:00"
+      },
+      {
+        "description": "1st end",
+        "time": "08:50"
+      },
+      {
+        "description": "2nd start",
+        "time": "08:55"
+      },
+      {
+        "description": "2nd end",
+        "time": "09:45"
+      },
+      {
+        "description": "secondary break end",
+        "time": "09:50"
+      },
+      {
+        "description": "secondary 3rd start",
+        "time": "09:55"
+      },
+      {
+        "description": "elementary break end",
+        "time": "10:00"
+      },
+      {
+        "description": "elementary 3rd start",
+        "time": "10:05"
+      },
+      {
+        "description": "3rd end",
+        "time": "10:45"
+      },
+      {
+        "description": "4th start",
+        "time": "10:50"
+      },
+      {
+        "description": "4th end",
+        "time": "11:40"
+      },
+      {
+        "description": "lunch",
+        "time": "12:20"
+      },
+      {
+        "description": "5th start",
+        "time": "12:25"
+      },
+      {
+        "description": "5th end",
+        "time": "13:15"
+      },
+      {
+        "description": "6th start",
+        "time": "13:20"
+      },
+      {
+        "description": "elementary 6th end",
+        "time": "14:00"
+      },
+      {
+        "description": "secondary 6th end",
+        "time": "14:10"
+      },
+      {
+        "description": "7th start",
+        "time": "14:15"
+      },
+      {
+        "description": "7th end",
+        "time": "14:55"
+      },
+      {
+        "description": "8th start",
+        "time": "15:00"
+      },
+      {
+        "description": "8th end",
         "time": "15:40"
-      },
-      {
-        "description": "bud",
-        "time": "15:29"
-      },
-      {
-        "description": "bud",
-        "time": "15:32"
-      },
-      {
-        "description": "bud",
-        "time": "15:31"
-      },
-      {
-        "description": "bud",
-        "time": "03:28"
-      }
-    ]
-  },
-  {
-    "bellSoundId": null,
-    "color": {
-      "border": "#818cf8",
-      "name": "Indigo",
-      "text": "#312e81",
-      "value": "#e0e7ff"
-    },
-    "id": "1768812055890",
-    "isDefault": false,
-    "mode": "happy",
-    "name": "happy",
-    "times": [
-      {
-        "description": "gp",
-        "time": "15:42"
-      }
-    ]
-  },
-  {
-    "bellSoundId": null,
-    "color": {
-      "border": "#34d399",
-      "name": "Green",
-      "text": "#065f46",
-      "value": "#d1fae5"
-    },
-    "id": "1768883864793",
-    "isDefault": false,
-    "mode": "Sports Day",
-    "name": "Sports Day",
-    "times": [
-      {
-        "description": "Lunch",
-        "time": "11:37"
-      }
-    ]
-  },
-  {
-    "bellSoundId": null,
-    "color": {
-      "border": "#a855f7",
-      "name": "Purple",
-      "text": "#5b21b6",
-      "value": "#e9d5ff"
-    },
-    "id": "1769484562323",
-    "isDefault": false,
-    "mode": "keke",
-    "name": "keke",
-    "times": [
-      {
-        "description": "gg",
-        "time": "10:30"
-      }
-    ]
-  },
-  {
-    "bellSoundId": null,
-    "color": {
-      "border": "#f97316",
-      "name": "Orange",
-      "text": "#7c2d12",
-      "value": "#fed7aa"
-    },
-    "id": "1769485253845",
-    "isDefault": false,
-    "mode": "ff",
-    "name": "ff",
-    "times": [
-      {
-        "description": "gg",
-        "time": "10:41"
       }
     ]
   }

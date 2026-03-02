@@ -6,34 +6,6 @@
     "description": ""
   },
   {
-    "id": "17679400620226",
-    "date": "2026-01-23",
-    "scheduleId": "1768812033294",
-    "description": "",
-    "customTimes": [
-      {
-        "description": "bud",
-        "time": "15:40"
-      },
-      {
-        "description": "bud",
-        "time": "15:29"
-      },
-      {
-        "description": "bud",
-        "time": "15:32"
-      },
-      {
-        "description": "bud",
-        "time": "15:31"
-      },
-      {
-        "description": "bud",
-        "time": "03:28"
-      }
-    ]
-  },
-  {
     "id": "17679400620227",
     "date": "2026-02-19",
     "scheduleId": "1767932229426",
@@ -100,65 +72,9 @@
     "description": ""
   },
   {
-    "id": "176881206671311",
-    "date": "2026-01-02",
-    "scheduleId": "1768812055890",
-    "description": ""
-  },
-  {
-    "id": "176881213964212",
-    "date": "2026-01-29",
-    "scheduleId": "1769484562323",
-    "description": ""
-  },
-  {
-    "id": "176881216125813",
-    "date": "2026-01-19",
-    "scheduleId": "1768812055890",
-    "description": ""
-  },
-  {
-    "id": "176887680708414",
-    "date": "2026-01-20",
-    "scheduleId": "1768812033294",
-    "description": "",
-    "customTimes": [
-      {
-        "description": "bud",
-        "time": "15:40"
-      },
-      {
-        "description": "bud",
-        "time": "15:29"
-      },
-      {
-        "time": "08:35",
-        "description": "bud"
-      }
-    ]
-  },
-  {
-    "id": "176889753899315",
-    "date": "2026-03-10",
-    "scheduleId": "1768812033294",
-    "description": ""
-  },
-  {
     "id": "176889805555116",
     "date": "2026-01-05",
     "scheduleId": "system-no-bell",
-    "description": ""
-  },
-  {
-    "id": "176889805555118",
-    "date": "2026-01-08",
-    "scheduleId": "1768812055890",
-    "description": ""
-  },
-  {
-    "id": "176889805555119",
-    "date": "2026-01-09",
-    "scheduleId": "1768812033294",
     "description": ""
   },
   {
@@ -174,37 +90,99 @@
     "description": ""
   },
   {
-    "id": "176939346345721",
-    "date": "2026-01-26",
-    "scheduleId": "1768812033294",
+    "id": "177243084741013",
+    "date": "2026-03-02",
+    "scheduleId": "1768807396803",
     "description": "",
     "customTimes": [
       {
-        "description": "bud",
+        "description": "First Bell",
+        "time": "07:55"
+      },
+      {
+        "description": "1st start",
+        "time": "08:00"
+      },
+      {
+        "description": "1st end",
+        "time": "08:50"
+      },
+      {
+        "description": "2nd start",
+        "time": "08:55"
+      },
+      {
+        "description": "Break",
+        "time": "09:45"
+      },
+      {
+        "description": "Secondary Break end",
+        "time": "09:50"
+      },
+      {
+        "description": "Secondary 3rd start",
+        "time": "09:55"
+      },
+      {
+        "description": "Elementary Break end",
+        "time": "10:00"
+      },
+      {
+        "description": "Elementary 3rd start",
+        "time": "10:05"
+      },
+      {
+        "description": "3rd end",
+        "time": "10:45"
+      },
+      {
+        "description": "4th start",
+        "time": "10:50"
+      },
+      {
+        "description": "4th end",
+        "time": "11:40"
+      },
+      {
+        "description": "Lunch",
+        "time": "12:20"
+      },
+      {
+        "description": "5th start",
+        "time": "12:25"
+      },
+      {
+        "description": "5th end",
+        "time": "13:15"
+      },
+      {
+        "description": "6th start",
+        "time": "13:20"
+      },
+      {
+        "description": "Elementary 6th end",
+        "time": "14:00"
+      },
+      {
+        "description": "Secondary 6th end",
+        "time": "14:10"
+      },
+      {
+        "description": "7th start",
+        "time": "14:15"
+      },
+      {
+        "description": "7th end",
+        "time": "14:55"
+      },
+      {
+        "description": "8th start",
+        "time": "15:00"
+      },
+      {
+        "description": "8th end",
         "time": "15:40"
-      },
-      {
-        "description": "bud",
-        "time": "15:29"
-      },
-      {
-        "description": "bud",
-        "time": "15:32"
-      },
-      {
-        "description": "bud",
-        "time": "15:31"
-      },
-      {
-        "description": "bud",
-        "time": "03:28"
       }
     ]
-  },
-  {
-    "id": "176948526758222",
-    "date": "2026-01-06",
-    "scheduleId": "1769485253845",
-    "description": ""
   }
 ]
