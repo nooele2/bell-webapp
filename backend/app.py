@@ -167,6 +167,8 @@ def public_ringtimes():
         lines.append(f"# Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         lines.append("#")
         lines.append("# Format: HH:MMsR Description")
+        lines.append("#   s = schedule code (space=Normal, A-Z=Special)")
+        lines.append("#   R = ringtone code (space=default, 0-9=number, -=mute)")
         lines.append("#")
 
         schedule_codes = {}
@@ -185,30 +187,26 @@ def public_ringtimes():
             if i < len(code_letters):
                 schedule_codes[schedule['id']] = code_letters[i]
 
+        # Normal schedule: HH:MM + space (s) + space (R) + space + description
         if normal_schedule and normal_schedule.get('times'):
             lines.append("")
             lines.append(f"# Normal Schedule: {normal_schedule['name']}")
-            for i, time_entry in enumerate(normal_schedule['times']):
+            for time_entry in normal_schedule['times']:
                 time_str = time_entry['time']
                 description = time_entry.get('description', '')
-                if i == 0:
-                    lines.append(f"{time_str} 0 {description}")
-                else:
-                    lines.append(f"{time_str}   {description}")
+                lines.append(f"{time_str}   {description}")
 
+        # Special schedules: HH:MM + schedule_code (s) + space (R) + space + description
         for schedule in special_schedules:
             if not schedule.get('times'):
                 continue
             schedule_code = schedule_codes.get(schedule['id'], 'X')
             lines.append("")
             lines.append(f"# Special Schedule ({schedule_code}): {schedule['name']}")
-            for i, time_entry in enumerate(schedule['times']):
+            for time_entry in schedule['times']:
                 time_str = time_entry['time']
                 description = time_entry.get('description', '')
-                if i == 0:
-                    lines.append(f"{time_str} {schedule_code}0 {description}")
-                else:
-                    lines.append(f"{time_str}   {description}")
+                lines.append(f"{time_str}{schedule_code} {description}")
 
         return Response('\n'.join(lines), mimetype='text/plain')
 
@@ -496,7 +494,6 @@ def bell():
         'public_urls': {
             'ringtimes': 'https://bell-web-app.onrender.com/public/ringtimes',
             'ringdates': 'https://bell-web-app.onrender.com/public/ringdates',
-            'info': 'Bash script can read directly from these URLs'
         }
     })
 
