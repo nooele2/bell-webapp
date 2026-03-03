@@ -26,6 +26,7 @@ def index():
             'bell': '/api/bell',
             'login': '/api/login',
             'schedules': '/api/schedules',
+            'ringtone_mappings': '/api/ringtone-mappings',
             'public_ringtimes': '/public/ringtimes',
             'public_ringdates': '/public/ringdates'
         }
@@ -147,6 +148,15 @@ def row_to_assignment(row):
         a['bellSoundId'] = row['bell_sound_id']
     return a
 
+def get_ringtone_slot(filename, mappings):
+    """Return the slot number (as string) for a filename, or space if not mapped."""
+    if not filename:
+        return ' '
+    for slot, mapped_filename in mappings.items():
+        if mapped_filename == filename:
+            return str(slot)
+    return ' '
+
 # ============================================================================
 # PUBLIC URL ENDPOINTS
 # ============================================================================
@@ -158,6 +168,11 @@ def public_ringtimes():
         cur = conn.cursor()
         cur.execute("SELECT * FROM schedules WHERE is_system = FALSE ORDER BY is_default DESC, name")
         schedules = [row_to_schedule(r) for r in cur.fetchall()]
+
+        # Load ringtone mappings: {slot: filename}
+        cur.execute("SELECT slot, filename FROM ringtone_mappings ORDER BY slot")
+        mappings = {str(row['slot']): row['filename'] for row in cur.fetchall()}
+
         cur.close()
         conn.close()
 
@@ -168,7 +183,7 @@ def public_ringtimes():
         lines.append("#")
         lines.append("# Format: HH:MMsR Description")
         lines.append("#   s = schedule code (space=Normal, A-Z=Special)")
-        lines.append("#   R = ringtone code (space=default, 0-9=number, -=mute)")
+        lines.append("#   R = ringtone slot (space=default, 0-9=slot number, -=mute)")
         lines.append("#")
 
         schedule_codes = {}
@@ -178,10 +193,10 @@ def public_ringtimes():
         for schedule in schedules:
             if schedule.get('isDefault'):
                 normal_schedule = schedule
-                schedule_codes[schedule['id']] = ' '
             else:
                 special_schedules.append(schedule)
 
+        # Assign codes using first letter of name, fallback to next available
         used_codes = set()
         all_letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
         for schedule in special_schedules:
@@ -196,26 +211,28 @@ def public_ringtimes():
                         used_codes.add(letter)
                         break
 
-        # Normal schedule: HH:MM + space (s) + space (R) + space + description
+        # Normal schedule: HH:MM + space(s) + R + space + description
         if normal_schedule and normal_schedule.get('times'):
+            r_digit = get_ringtone_slot(normal_schedule.get('bellSoundId'), mappings)
             lines.append("")
             lines.append(f"# Normal Schedule: {normal_schedule['name']}")
             for time_entry in normal_schedule['times']:
                 time_str = time_entry['time']
                 description = time_entry.get('description', '')
-                lines.append(f"{time_str}   {description}")
+                lines.append(f"{time_str} {r_digit} {description}")
 
-        # Special schedules: HH:MM + schedule_code (s) + space (R) + space + description
+        # Special schedules: HH:MM + code(s) + R + space + description
         for schedule in special_schedules:
             if not schedule.get('times'):
                 continue
             schedule_code = schedule_codes.get(schedule['id'], 'X')
+            r_digit = get_ringtone_slot(schedule.get('bellSoundId'), mappings)
             lines.append("")
             lines.append(f"# Special Schedule ({schedule_code}): {schedule['name']}")
             for time_entry in schedule['times']:
                 time_str = time_entry['time']
                 description = time_entry.get('description', '')
-                lines.append(f"{time_str}{schedule_code} {description}")
+                lines.append(f"{time_str}{schedule_code}{r_digit} {description}")
 
         return Response('\n'.join(lines), mimetype='text/plain')
 
@@ -329,6 +346,53 @@ def check_auth():
         return jsonify({'authenticated': True, 'user': {'email': session.get('user'), 'name': session.get('name')}})
     print("❌ Not authenticated - no session")
     return jsonify({'authenticated': False}), 401
+
+# ============================================================================
+# RINGTONE MAPPINGS API
+# ============================================================================
+
+@app.route('/api/ringtone-mappings', methods=['GET'])
+@login_required
+def get_ringtone_mappings():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT slot, filename FROM ringtone_mappings ORDER BY slot")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    # Return as dict {slot: filename} for all 10 slots (0-9)
+    mappings = {str(i): None for i in range(10)}
+    for row in rows:
+        mappings[str(row['slot'])] = row['filename']
+    return jsonify(mappings)
+
+@app.route('/api/ringtone-mappings', methods=['PUT'])
+@login_required
+def save_ringtone_mappings():
+    """Save all ringtone mappings. Expects {slot: filename} dict."""
+    data = request.json  # e.g. {"0": "ringbell.wav", "1": "ringbells.wav", ...}
+    conn = get_db()
+    cur = conn.cursor()
+    for slot_str, filename in data.items():
+        try:
+            slot = int(slot_str)
+            if slot < 0 or slot > 9:
+                continue
+            if filename:
+                cur.execute("""
+                    INSERT INTO ringtone_mappings (slot, filename)
+                    VALUES (%s, %s)
+                    ON CONFLICT (slot) DO UPDATE SET filename = EXCLUDED.filename
+                """, (slot, filename))
+            else:
+                cur.execute("DELETE FROM ringtone_mappings WHERE slot = %s", (slot,))
+        except (ValueError, TypeError):
+            continue
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("🔔 Ringtone mappings saved!")
+    return jsonify({'success': True})
 
 # ============================================================================
 # SCHEDULES API
