@@ -182,10 +182,19 @@ def public_ringtimes():
             else:
                 special_schedules.append(schedule)
 
-        code_letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-        for i, schedule in enumerate(special_schedules):
-            if i < len(code_letters):
-                schedule_codes[schedule['id']] = code_letters[i]
+        used_codes = set()
+        all_letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+        for schedule in special_schedules:
+            preferred = schedule['name'][0].upper() if schedule['name'] else 'A'
+            if preferred in all_letters and preferred not in used_codes:
+                schedule_codes[schedule['id']] = preferred
+                used_codes.add(preferred)
+            else:
+                for letter in all_letters:
+                    if letter not in used_codes:
+                        schedule_codes[schedule['id']] = letter
+                        used_codes.add(letter)
+                        break
 
         # Normal schedule: HH:MM + space (s) + space (R) + space + description
         if normal_schedule and normal_schedule.get('times'):
@@ -243,10 +252,19 @@ def public_ringdates():
             else:
                 special_schedules.append(schedule)
 
-        code_letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-        for i, schedule in enumerate(special_schedules):
-            if i < len(code_letters):
-                schedule_codes[schedule['id']] = code_letters[i]
+        used_codes = set()
+        all_letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+        for schedule in special_schedules:
+            preferred = schedule['name'][0].upper() if schedule['name'] else 'A'
+            if preferred in all_letters and preferred not in used_codes:
+                schedule_codes[schedule['id']] = preferred
+                used_codes.add(preferred)
+            else:
+                for letter in all_letters:
+                    if letter not in used_codes:
+                        schedule_codes[schedule['id']] = letter
+                        used_codes.add(letter)
+                        break
 
         for assignment in assignments:
             date_str = assignment['date']
