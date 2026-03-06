@@ -291,7 +291,7 @@ def public_ringdates():
                 lines.append(f"{date_str}   {description if description else 'No Bells'}")
             else:
                 schedule_code = schedule_codes.get(schedule_id, 'X')
-                lines.append(f"{date_str} {schedule_code}  {description}")
+                lines.append(f"{date_str}{schedule_code}  {description}")
 
         return Response('\n'.join(lines), mimetype='text/plain')
 

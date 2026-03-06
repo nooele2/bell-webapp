@@ -6,7 +6,7 @@ import CalendarView from '../components/CalendarView';
 import ListView from '../components/ListView';
 import DateDetailsModal from '../components/DateDetailsModal';
 import BulkScheduleModal from '../components/BulkScheduleModal';
-import AddBellSound from '../pages/AddBellSound';
+import RingtoneSetup from '../pages/RingtoneSetup';
 import { getSchedules, getAssignments, createAssignment, updateAssignment, deleteAssignment } from '../services/api';
 
 function Dashboard({ user, onLogout, onManageSchedules }) {
@@ -18,7 +18,7 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
   const [selectedDates, setSelectedDates] = useState([]);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [showBellSounds, setShowBellSounds] = useState(false);
+  const [showRingtoneSetup, setShowRingtoneSetup] = useState(false);
 
   const loadData = async () => {
     try {
@@ -43,13 +43,11 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
   const handleDateClick = (date) => {
     if (isSelectionMode) {
       const dateStr = formatDateString(date);
-      
       const hasSchedule = dateAssignments.some(a => a.date === dateStr);
       if (hasSchedule) {
         alert('This date already has a schedule assigned. Please delete the existing schedule first if you want to change it.');
         return;
       }
-
       setSelectedDates(prev => {
         if (prev.includes(dateStr)) {
           return prev.filter(d => d !== dateStr);
@@ -94,23 +92,12 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
   const handleSaveAssignment = async (dates, scheduleId, description, customTimes = null, assignmentId = null, bellSoundId = null) => {
     try {
       if (assignmentId) {
-        const updateData = { 
-          date: dates[0],
-          scheduleId, 
-          description, 
-          customTimes,
-          bellSoundId
-        };
-        
-        await updateAssignment(assignmentId, updateData);
+        await updateAssignment(assignmentId, { date: dates[0], scheduleId, description, customTimes, bellSoundId });
       } else {
         await createAssignment(dates, scheduleId, description, customTimes, bellSoundId);
       }
-      
       await loadData();
-      
       setSelectedDate(null);
-      
       alert(assignmentId ? 'Schedule updated successfully!' : 'Schedule saved successfully!');
     } catch (error) {
       console.error('Error saving assignment:', error);
@@ -152,23 +139,23 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
     );
   }
 
-  if (showBellSounds) {
-    return <AddBellSound onBack={() => setShowBellSounds(false)} />;
+  if (showRingtoneSetup) {
+    return <RingtoneSetup onBack={() => setShowRingtoneSetup(false)} />;
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header 
-        user={user} 
-        onLogout={onLogout} 
+      <Header
+        user={user}
+        onLogout={onLogout}
         onManageSchedules={onManageSchedules}
-        onManageBellSounds={() => setShowBellSounds(true)}
+        onRingtoneSetup={() => setShowRingtoneSetup(true)}
       />
 
       <div className="max-w-7xl mx-auto p-6">
-        <StatusSummary 
-          schedules={schedules} 
-          dateAssignments={dateAssignments} 
+        <StatusSummary
+          schedules={schedules}
+          dateAssignments={dateAssignments}
           onUpdateAssignment={updateAssignment}
           onRefresh={loadData}
         />
@@ -179,8 +166,8 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
               <button
                 onClick={() => setViewMode('calendar')}
                 className={`px-4 py-2 flex items-center gap-2 ${
-                  viewMode === 'calendar' 
-                    ? 'bg-blue-600 text-white' 
+                  viewMode === 'calendar'
+                    ? 'bg-blue-600 text-white'
                     : 'text-gray-700 hover:bg-gray-50'
                 } rounded-l-lg transition-colors`}
               >
@@ -189,8 +176,8 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
               <button
                 onClick={() => setViewMode('list')}
                 className={`px-4 py-2 flex items-center gap-2 ${
-                  viewMode === 'list' 
-                    ? 'bg-blue-600 text-white' 
+                  viewMode === 'list'
+                    ? 'bg-blue-600 text-white'
                     : 'text-gray-700 hover:bg-gray-50'
                 } rounded-r-lg transition-colors`}
               >
