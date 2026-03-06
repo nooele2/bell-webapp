@@ -169,7 +169,6 @@ def public_ringtimes():
         cur.execute("SELECT * FROM schedules WHERE is_system = FALSE ORDER BY is_default DESC, name")
         schedules = [row_to_schedule(r) for r in cur.fetchall()]
 
-        # Load ringtone mappings: {slot: filename}
         cur.execute("SELECT slot, filename FROM ringtone_mappings ORDER BY slot")
         mappings = {str(row['slot']): row['filename'] for row in cur.fetchall()}
 
@@ -196,7 +195,6 @@ def public_ringtimes():
             else:
                 special_schedules.append(schedule)
 
-        # Assign codes using first letter of name, fallback to next available
         used_codes = set()
         all_letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
         for schedule in special_schedules:
@@ -211,7 +209,6 @@ def public_ringtimes():
                         used_codes.add(letter)
                         break
 
-        # Normal schedule: HH:MM + space(s) + R + space + description
         if normal_schedule and normal_schedule.get('times'):
             r_digit = get_ringtone_slot(normal_schedule.get('bellSoundId'), mappings)
             lines.append("")
@@ -221,7 +218,6 @@ def public_ringtimes():
                 description = time_entry.get('description', '')
                 lines.append(f"{time_str} {r_digit} {description}")
 
-        # Special schedules: HH:MM + code(s) + R + space + description
         for schedule in special_schedules:
             if not schedule.get('times'):
                 continue
@@ -261,12 +257,11 @@ def public_ringdates():
         lines.append("# Format: YYYY-MM-DDsP Description")
         lines.append("#")
 
+        # Build schedule codes - only for special (non-default) schedules
         schedule_codes = {}
         special_schedules = []
         for schedule in schedules:
-            if schedule.get('isDefault'):
-                schedule_codes[schedule['id']] = ' '
-            else:
+            if not schedule.get('isDefault'):
                 special_schedules.append(schedule)
 
         used_codes = set()
@@ -287,10 +282,15 @@ def public_ringdates():
             date_str = assignment['date']
             schedule_id = assignment['scheduleId']
             description = assignment.get('description', '')
+
             if schedule_id == 'system-no-bell':
+                # No-Bells day: space at position 10
                 lines.append(f"{date_str}   {description if description else 'No Bells'}")
             else:
-                schedule_code = schedule_codes.get(schedule_id, 'X')
+                schedule_code = schedule_codes.get(schedule_id)
+                if not schedule_code:
+                    # This is the default/normal schedule - skip it, piring handles it automatically
+                    continue
                 lines.append(f"{date_str}{schedule_code}  {description}")
 
         return Response('\n'.join(lines), mimetype='text/plain')
@@ -360,7 +360,6 @@ def get_ringtone_mappings():
     rows = cur.fetchall()
     cur.close()
     conn.close()
-    # Return as dict {slot: filename} for all 10 slots (0-9)
     mappings = {str(i): None for i in range(10)}
     for row in rows:
         mappings[str(row['slot'])] = row['filename']
@@ -369,8 +368,7 @@ def get_ringtone_mappings():
 @app.route('/api/ringtone-mappings', methods=['PUT'])
 @login_required
 def save_ringtone_mappings():
-    """Save all ringtone mappings. Expects {slot: filename} dict."""
-    data = request.json  # e.g. {"0": "ringbell.wav", "1": "ringbells.wav", ...}
+    data = request.json
     conn = get_db()
     cur = conn.cursor()
     for slot_str, filename in data.items():
