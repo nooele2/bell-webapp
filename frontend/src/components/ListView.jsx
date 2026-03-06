@@ -4,15 +4,13 @@ import { Filter } from 'lucide-react';
 import { SYSTEM_NO_BELL_SCHEDULE } from '../constants';
 import { getScheduleColorById, getScheduleName } from '../utils/scheduleUtils';
 
-function ListView({ schedules, dateAssignments, onDateClick, isSelectionMode, selectedDates }) {
+function ListView({ schedules, dateAssignments, onDateClick, isSelectionMode }) {
   const [filterScheduleId, setFilterScheduleId] = useState('all');
 
   const allSchedules = [SYSTEM_NO_BELL_SCHEDULE, ...schedules];
 
   const getScheduleCount = (scheduleId) => {
-    if (scheduleId === 'all') {
-      return dateAssignments.length;
-    }
+    if (scheduleId === 'all') return dateAssignments.length;
     return dateAssignments.filter(a => a.scheduleId === scheduleId).length;
   };
 
@@ -20,17 +18,16 @@ function ListView({ schedules, dateAssignments, onDateClick, isSelectionMode, se
     ? dateAssignments
     : dateAssignments.filter(a => a.scheduleId === filterScheduleId);
 
+  // Group all assignments by date
   const dateMap = new Map();
   filteredAssignments.forEach(assignment => {
     if (!dateMap.has(assignment.date)) {
-      dateMap.set(assignment.date, assignment);
+      dateMap.set(assignment.date, []);
     }
+    dateMap.get(assignment.date).push(assignment);
   });
 
-  const uniqueAssignments = Array.from(dateMap.values());
-  const sortedAssignments = uniqueAssignments.sort((a, b) => 
-    a.date.localeCompare(b.date)
-  );
+  const sortedDates = Array.from(dateMap.keys()).sort();
 
   const today = formatDate(new Date());
 
@@ -38,25 +35,21 @@ function ListView({ schedules, dateAssignments, onDateClick, isSelectionMode, se
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-sm text-blue-900 font-medium">
-            📅 Selection Mode Active
-          </p>
+          <p className="text-sm text-blue-900 font-medium">📅 Selection Mode Active</p>
         </div>
         <p className="text-center text-gray-600 py-8">
-          Please use Calendar view for date selection. Dates with existing schedules cannot be selected.
+          Please use Calendar view for date selection.
         </p>
       </div>
     );
   }
 
-  const groupedByMonth = sortedAssignments.reduce((groups, assignment) => {
-    const date = parseDate(assignment.date);
+  // Group by month
+  const groupedByMonth = sortedDates.reduce((groups, dateStr) => {
+    const date = parseDate(dateStr);
     const monthYear = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
-    
-    if (!groups[monthYear]) {
-      groups[monthYear] = [];
-    }
-    groups[monthYear].push(assignment);
+    if (!groups[monthYear]) groups[monthYear] = [];
+    groups[monthYear].push(dateStr);
     return groups;
   }, {});
 
@@ -85,87 +78,91 @@ function ListView({ schedules, dateAssignments, onDateClick, isSelectionMode, se
       </div>
 
       <div className="bg-white rounded-lg shadow-md">
-        {sortedAssignments.length === 0 ? (
+        {sortedDates.length === 0 ? (
           <div className="p-12 text-center text-gray-500">
             <div className="text-lg font-medium mb-2">
-              {filterScheduleId === 'all' 
-                ? 'No scheduled dates found' 
+              {filterScheduleId === 'all'
+                ? 'No scheduled dates found'
                 : `No dates found for "${allSchedules.find(s => s.id === filterScheduleId)?.name}" schedule`
               }
             </div>
-            <div className="text-sm">
-              {filterScheduleId === 'all'
-                ? 'Click on a date in the calendar to assign a schedule'
-                : 'Select "All Schedules" to see all assignments'
-              }
-            </div>
+            <div className="text-sm">Click on a date in the calendar to assign a schedule</div>
           </div>
         ) : (
           <div>
-            {Object.entries(groupedByMonth).map(([monthYear, assignments]) => (
+            {Object.entries(groupedByMonth).map(([monthYear, dates]) => (
               <div key={monthYear}>
                 <div className="bg-gray-100 px-6 py-3 border-b border-gray-300 sticky top-0 z-10">
                   <h3 className="text-lg font-bold text-gray-900">{monthYear}</h3>
                 </div>
-                
+
                 <div className="divide-y divide-gray-200">
-                  {assignments.map(assignment => {
-                    const scheduleName = getScheduleName(assignment.scheduleId, schedules);
-                    const date = parseDate(assignment.date);
-                    const isTodayDate = assignment.date === today;
-                    const schedColor = getScheduleColorById(assignment.scheduleId, schedules);
-                    const isNoBell = assignment.scheduleId === 'system-no-bell';
-                    
+                  {dates.map(dateStr => {
+                    const assignments = dateMap.get(dateStr);
+                    const date = parseDate(dateStr);
+                    const isTodayDate = dateStr === today;
+
+                    // Use first assignment's color for left border
+                    const firstColor = getScheduleColorById(assignments[0].scheduleId, schedules);
+
                     return (
                       <div
-                        key={assignment.id}
+                        key={dateStr}
                         onClick={() => onDateClick(date)}
-                        className={`p-5 hover:bg-gray-50 cursor-pointer transition-all border-l-[6px] ${
-                          isTodayDate ? 'bg-blue-50' : ''
-                        }`}
-                        style={{ borderLeftColor: schedColor.border }}
+                        className={`p-5 hover:bg-gray-50 cursor-pointer transition-all border-l-[6px] ${isTodayDate ? 'bg-blue-50' : ''}`}
+                        style={{ borderLeftColor: firstColor.border }}
                       >
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-start justify-between">
                           <div className="flex-1">
-                            <div className={`font-medium text-lg ${isTodayDate ? 'text-blue-900' : 'text-gray-900'}`}>
-                              {date.toLocaleDateString('en-US', { 
-                                weekday: 'long', 
-                                month: 'long', 
-                                day: 'numeric' 
+                            {/* Date */}
+                            <div className={`font-medium text-lg mb-2 ${isTodayDate ? 'text-blue-900' : 'text-gray-900'}`}>
+                              {date.toLocaleDateString('en-US', {
+                                weekday: 'long',
+                                month: 'long',
+                                day: 'numeric'
                               })}
                               {isTodayDate && (
-                                <span className="ml-2 text-xs bg-blue-600 text-white px-2 py-0.5 rounded">
-                                  Today
-                                </span>
+                                <span className="ml-2 text-xs bg-blue-600 text-white px-2 py-0.5 rounded">Today</span>
                               )}
                             </div>
-                            <div className="flex items-center gap-2 mt-2">
-                              <span 
-                                className="text-xs px-2 py-1 rounded font-medium"
-                                style={{
-                                  backgroundColor: schedColor.value,
-                                  color: schedColor.text
-                                }}
-                              >
-                                {scheduleName}
-                              </span>
-                              {isNoBell && (
-                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                                  System
-                                </span>
-                              )}
-                              {assignment.customTimes && (
-                                <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
-                                  Custom Times
-                                </span>
-                              )}
+
+                            {/* All schedules stacked */}
+                            <div className="flex flex-wrap gap-2">
+                              {assignments.map(assignment => {
+                                const scheduleName = getScheduleName(assignment.scheduleId, schedules);
+                                const schedColor = getScheduleColorById(assignment.scheduleId, schedules);
+                                const isNoBell = assignment.scheduleId === 'system-no-bell';
+
+                                return (
+                                  <div key={assignment.id} className="flex items-center gap-1.5">
+                                    <span
+                                      className="text-xs px-2.5 py-1 rounded-full font-medium border"
+                                      style={{
+                                        backgroundColor: schedColor.value,
+                                        color: schedColor.text,
+                                        borderColor: schedColor.border
+                                      }}
+                                    >
+                                      {scheduleName}
+                                    </span>
+                                    {isNoBell && (
+                                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">System</span>
+                                    )}
+                                    {assignment.description && (
+                                      <span className="text-xs text-gray-500 italic">"{assignment.description}"</span>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
-                            {assignment.description && (
-                              <div className="text-sm text-gray-600 mt-2 italic">
-                                "{assignment.description}"
-                              </div>
-                            )}
                           </div>
+
+                          {/* Assignment count badge if more than 1 */}
+                          {assignments.length > 1 && (
+                            <div className="ml-3 flex-shrink-0 w-7 h-7 rounded-full bg-gray-200 text-gray-600 text-xs font-bold flex items-center justify-center">
+                              {assignments.length}
+                            </div>
+                          )}
                         </div>
                       </div>
                     );

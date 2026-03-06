@@ -40,31 +40,26 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
     loadData();
   }, []);
 
-  const handleDateClick = (date) => {
-    if (isSelectionMode) {
-      const dateStr = formatDateString(date);
-      const hasSchedule = dateAssignments.some(a => a.date === dateStr);
-      if (hasSchedule) {
-        alert('This date already has a schedule assigned. Please delete the existing schedule first if you want to change it.');
-        return;
-      }
-      setSelectedDates(prev => {
-        if (prev.includes(dateStr)) {
-          return prev.filter(d => d !== dateStr);
-        } else {
-          return [...prev, dateStr];
-        }
-      });
-    } else {
-      setSelectedDate(date);
-    }
-  };
-
   const formatDateString = (date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+  };
+
+  const handleDateClick = (date) => {
+    if (isSelectionMode) {
+      const dayOfWeek = date.getDay();
+      if (dayOfWeek === 0 || dayOfWeek === 6) return; // block weekends only
+      const dateStr = formatDateString(date);
+      setSelectedDates(prev =>
+        prev.includes(dateStr)
+          ? prev.filter(d => d !== dateStr)
+          : [...prev, dateStr]
+      );
+    } else {
+      setSelectedDate(date);
+    }
   };
 
   const handleSetScheduleMode = () => {
@@ -91,14 +86,8 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
 
   const handleSaveAssignment = async (dates, scheduleId, description, customTimes = null, assignmentId = null, bellSoundId = null) => {
     try {
-      if (assignmentId) {
-        await updateAssignment(assignmentId, { date: dates[0], scheduleId, description, customTimes, bellSoundId });
-      } else {
-        await createAssignment(dates, scheduleId, description, customTimes, bellSoundId);
-      }
+      await createAssignment(dates, scheduleId, description, customTimes, bellSoundId);
       await loadData();
-      setSelectedDate(null);
-      alert(assignmentId ? 'Schedule updated successfully!' : 'Schedule saved successfully!');
     } catch (error) {
       console.error('Error saving assignment:', error);
       alert('Failed to save assignment: ' + error.message);
@@ -124,7 +113,6 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
     try {
       await deleteAssignment(assignmentId);
       await loadData();
-      alert('Schedule deleted successfully!');
     } catch (error) {
       console.error('Error deleting assignment:', error);
       alert('Failed to delete assignment: ' + error.message);
@@ -161,29 +149,19 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
         />
 
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <div className="flex bg-white rounded-lg shadow-sm border">
-              <button
-                onClick={() => setViewMode('calendar')}
-                className={`px-4 py-2 flex items-center gap-2 ${
-                  viewMode === 'calendar'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-700 hover:bg-gray-50'
-                } rounded-l-lg transition-colors`}
-              >
-                <Calendar size={18} /> Calendar
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`px-4 py-2 flex items-center gap-2 ${
-                  viewMode === 'list'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-700 hover:bg-gray-50'
-                } rounded-r-lg transition-colors`}
-              >
-                <List size={18} /> List
-              </button>
-            </div>
+          <div className="flex bg-white rounded-lg shadow-sm border">
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`px-4 py-2 flex items-center gap-2 ${viewMode === 'calendar' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-50'} rounded-l-lg transition-colors`}
+            >
+              <Calendar size={18} /> Calendar
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-4 py-2 flex items-center gap-2 ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-50'} rounded-r-lg transition-colors`}
+            >
+              <List size={18} /> List
+            </button>
           </div>
 
           <div className="flex items-center gap-3">
@@ -212,15 +190,13 @@ function Dashboard({ user, onLogout, onManageSchedules }) {
                   onClick={onManageSchedules}
                   className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
                 >
-                  <Settings size={18} />
-                  Manage Schedules
+                  <Settings size={18} /> Manage Schedules
                 </button>
                 <button
                   onClick={handleSetScheduleMode}
                   className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
                 >
-                  <CalendarPlus size={18} />
-                  Set Schedule
+                  <CalendarPlus size={18} /> Set Schedule
                 </button>
               </>
             )}
