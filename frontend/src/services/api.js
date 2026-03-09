@@ -1,127 +1,53 @@
-import { API_BASE_URL } from '../constants';
-
-// ============================================================================
-// Core API Helper
-// ============================================================================
+export const API_BASE_URL = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api`
+  : 'http://localhost:5001/api';
 
 const apiCall = async (endpoint, options = {}) => {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers: { 'Content-Type': 'application/json', ...options.headers },
   });
-  
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Request failed' }));
     throw new Error(error.error || 'Request failed');
   }
-  
   return response.json();
 };
 
-// ============================================================================
-// Authentication API
-// ============================================================================
+// Auth
+export const login = (email, password) =>
+  apiCall('/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+export const logout = () => apiCall('/logout', { method: 'POST' });
+export const checkAuth = () => apiCall('/check-auth', { method: 'GET' });
 
-export const login = async (email, password) => {
-  return apiCall('/login', {
-    method: 'POST',
-    body: JSON.stringify({ email, password }),
-  });
-};
+// Schedules
+export const getSchedules = () => apiCall('/schedules', { method: 'GET' });
+export const createSchedule = (data) =>
+  apiCall('/schedules', { method: 'POST', body: JSON.stringify(data) });
+export const updateSchedule = (id, data) =>
+  apiCall(`/schedules/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+export const deleteSchedule = (id) =>
+  apiCall(`/schedules/${id}`, { method: 'DELETE' });
 
-export const logout = async () => {
-  return apiCall('/logout', { method: 'POST' });
-};
+// Table rows
+export const getTableRows = () => apiCall('/table-rows', { method: 'GET' });
+export const createTableRow = (data) =>
+  apiCall('/table-rows', { method: 'POST', body: JSON.stringify(data) });
+export const updateTableRow = (id, data) =>
+  apiCall(`/table-rows/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+export const deleteTableRow = (id) =>
+  apiCall(`/table-rows/${id}`, { method: 'DELETE' });
+export const replaceDateRows = (dateStr, rows) =>
+  apiCall(`/table-rows/date/${dateStr}`, { method: 'PUT', body: JSON.stringify(rows) });
 
-export const checkAuth = async () => {
-  return apiCall('/check-auth', { method: 'GET' });
-};
+// Ringtone mappings
+export const getRingtoneMappings = () => apiCall('/ringtone-mappings', { method: 'GET' });
+export const saveRingtoneMappings = (data) =>
+  apiCall('/ringtone-mappings', { method: 'PUT', body: JSON.stringify(data) });
 
-// ============================================================================
-// Schedules API
-// ============================================================================
-
-export const getSchedules = async () => {
-  return apiCall('/schedules', { method: 'GET' });
-};
-
-export const createSchedule = async (schedule) => {
-  return apiCall('/schedules', {
-    method: 'POST',
-    body: JSON.stringify(schedule),
-  });
-};
-
-export const updateSchedule = async (id, schedule) => {
-  return apiCall(`/schedules/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(schedule),
-  });
-};
-
-export const deleteSchedule = async (id) => {
-  return apiCall(`/schedules/${id}`, { method: 'DELETE' });
-};
-
-// ============================================================================
-// Assignments API
-// ============================================================================
-
-export const getAssignments = async () => {
-  return apiCall('/assignments', { method: 'GET' });
-};
-
-export const createAssignment = async (dates, scheduleId, description, customTimes = null, bellSoundId = null) => {
-  return apiCall('/assignments', {
-    method: 'POST',
-    body: JSON.stringify({
-      dates,
-      scheduleId,
-      description,
-      customTimes,
-      bellSoundId,
-    }),
-  });
-};
-
-export const updateAssignment = async (id, data) => {
-  return apiCall(`/assignments/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify({
-      date: data.date,
-      scheduleId: data.scheduleId,
-      description: data.description,
-      customTimes: data.customTimes,
-      bellSoundId: data.bellSoundId,
-    }),
-  });
-};
-
-export const deleteAssignment = async (id) => {
-  return apiCall(`/assignments/${id}`, { method: 'DELETE' });
-};
-
-// ============================================================================
-// Legacy API (for backward compatibility)
-// ============================================================================
-
-export const getScheduleTimes = async () => {
-  return apiCall('/schedule/times', { method: 'GET' });
-};
-
-export const healthCheck = async () => {
-  return apiCall('/health', { method: 'GET' });
-};
-
-// Default export for backward compatibility
+// Default export for AuthContext compatibility
 export default {
   get: (endpoint) => apiCall(endpoint, { method: 'GET' }),
-  post: (endpoint, data) => apiCall(endpoint, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
+  post: (endpoint, data) => apiCall(endpoint, { method: 'POST', body: JSON.stringify(data) }),
 };

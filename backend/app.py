@@ -6,7 +6,7 @@ import os
 import json
 import psycopg2
 import psycopg2.extras
-from datetime import datetime
+from datetime import datetime, timedelta
 
 try:
     from dotenv import load_dotenv
@@ -17,24 +17,6 @@ except ImportError:
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-in-production')
 
-@app.route('/', methods=['GET'])
-def index():
-    return jsonify({
-        'message': 'Bell Schedule API',
-        'status': 'running',
-        'endpoints': {
-            'bell': '/api/bell',
-            'login': '/api/login',
-            'schedules': '/api/schedules',
-            'ringtone_mappings': '/api/ringtone-mappings',
-            'public_ringtimes': '/public/ringtimes',
-            'public_ringdates': '/public/ringdates'
-        }
-    })
-
-# ============================================================================
-# CORS Configuration
-# ============================================================================
 CORS(app,
      origins=[
          'http://localhost:5173',
@@ -46,11 +28,7 @@ CORS(app,
      methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
      expose_headers=['Set-Cookie'])
 
-# ============================================================================
-# Session Configuration
-# ============================================================================
 is_production = os.environ.get('RENDER') is not None or os.environ.get('FLASK_ENV') == 'production'
-
 app.config['SESSION_COOKIE_SECURE'] = is_production
 app.config['SESSION_COOKIE_SAMESITE'] = 'None' if is_production else 'Lax'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
@@ -58,22 +36,13 @@ app.config['PERMANENT_SESSION_LIFETIME'] = 1800
 app.config['SESSION_COOKIE_DOMAIN'] = None
 app.config['SESSION_COOKIE_PATH'] = '/'
 
-print(f"🔧 Session config: SECURE={app.config['SESSION_COOKIE_SECURE']}, SAMESITE={app.config['SESSION_COOKIE_SAMESITE']}")
+print(f"🔧 Session: SECURE={app.config['SESSION_COOKIE_SECURE']}, SAMESITE={app.config['SESSION_COOKIE_SAMESITE']}")
 
-# Users
 USERS = {
     'boo@crics.asia': {
         'password_hash': generate_password_hash('boo123'),
         'name': 'Boo'
     }
-}
-
-# Default color presets
-DEFAULT_COLORS = {
-    "Normal": {"name": "Yellow", "value": "#fef3c7", "border": "#fde047", "text": "#854d0e"},
-    "Late Start": {"name": "Blue", "value": "#dbeafe", "border": "#60a5fa", "text": "#1e3a8a"},
-    "Buddy": {"name": "Green", "value": "#d1fae5", "border": "#34d399", "text": "#065f46"},
-    "Assembly": {"name": "Purple", "value": "#e9d5ff", "border": "#a78bfa", "text": "#5b21b6"}
 }
 
 # ============================================================================
@@ -88,264 +57,307 @@ def get_db():
     return conn
 
 def init_db():
-    """Insert default schedule if none exist"""
+    """Create/migrate tables and seed default data if empty."""
     try:
         conn = get_db()
         cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) as count FROM schedules")
-        result = cur.fetchone()
-        if result['count'] == 0:
+
+        # schedules table — is_normal marks the baseline Normal schedule
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS schedules (
+                id TEXT PRIMARY KEY,
+                code TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                color TEXT NOT NULL DEFAULT '#1a3a6b',
+                is_addon BOOLEAN DEFAULT FALSE,
+                is_normal BOOLEAN DEFAULT FALSE,
+                bell_slot INTEGER DEFAULT 0,
+                times JSONB DEFAULT '[]'
+            )
+        """)
+        # Add is_normal column if upgrading from old schema
+        cur.execute("""
+            ALTER TABLE schedules ADD COLUMN IF NOT EXISTS is_normal BOOLEAN DEFAULT FALSE
+        """)
+        cur.execute("""
+            ALTER TABLE schedules ADD COLUMN IF NOT EXISTS bell_slot INTEGER DEFAULT 0
+        """)
+
+        # table_rows — date/range assignments
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS table_rows (
+                id TEXT PRIMARY KEY,
+                code TEXT NOT NULL,
+                from_date TEXT NOT NULL,
+                to_date TEXT,
+                comment TEXT DEFAULT ''
+            )
+        """)
+
+        # ringtone slot mappings
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS ringtone_mappings (
+                slot INTEGER PRIMARY KEY,
+                filename TEXT NOT NULL
+            )
+        """)
+
+        conn.commit()
+
+        # Seed Normal schedule if it doesn't exist yet
+        cur.execute("SELECT COUNT(*) as count FROM schedules WHERE is_normal = TRUE")
+        if cur.fetchone()['count'] == 0:
             cur.execute("""
-                INSERT INTO schedules (id, name, mode, is_default, is_system, color, bell_sound_id, times)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO schedules (id, code, name, color, is_addon, is_normal, times)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (code) DO NOTHING
             """, (
-                "1", "Normal Schedule", "Normal", True, False,
-                json.dumps(DEFAULT_COLORS["Normal"]), None,
+                "normal-schedule",
+                "N",
+                "Normal Schedule",
+                "#1a3a6b",
+                False,
+                True,
                 json.dumps([
-                    {"time": "09:00", "description": "1st period"},
-                    {"time": "10:00", "description": "2nd period"},
-                    {"time": "10:30", "description": "Morning break"},
-                    {"time": "11:00", "description": "3rd period"},
-                    {"time": "12:00", "description": "Lunch break"},
-                    {"time": "13:00", "description": "4th period"},
-                    {"time": "14:00", "description": "5th period"},
-                    {"time": "15:00", "description": "School end"}
+                    {"time": "07:55", "label": "Pre-1st period",    "muted": False},
+                    {"time": "08:00", "label": "1st period",         "muted": False},
+                    {"time": "08:50", "label": "Pre-2nd period",     "muted": False},
+                    {"time": "08:55", "label": "2nd period",         "muted": False},
+                    {"time": "09:45", "label": "Morning break",      "muted": False},
+                    {"time": "09:50", "label": "Pre-3rd period",     "muted": False},
+                    {"time": "09:55", "label": "3rd period",         "muted": False},
+                    {"time": "10:00", "label": "Elementary restart", "muted": False},
+                    {"time": "10:45", "label": "Pre-4th period",     "muted": False},
+                    {"time": "10:50", "label": "4th period",         "muted": False},
+                    {"time": "11:40", "label": "Lunch break",        "muted": False},
+                    {"time": "12:20", "label": "Pre-5th period",     "muted": False},
+                    {"time": "12:25", "label": "5th period",         "muted": False},
+                    {"time": "13:15", "label": "Pre-6th period",     "muted": False},
+                    {"time": "13:20", "label": "6th period",         "muted": False},
+                    {"time": "14:10", "label": "Pre-7th period",     "muted": False},
+                    {"time": "14:15", "label": "7th period",         "muted": False},
+                    {"time": "14:55", "label": "Pre-8th period",     "muted": False},
+                    {"time": "15:00", "label": "8th period",         "muted": False},
+                    {"time": "15:40", "label": "School end",         "muted": False},
                 ])
             ))
             conn.commit()
-            print("✅ Default schedule inserted")
+            print("✅ Normal Schedule seeded")
+
         cur.close()
         conn.close()
     except Exception as e:
         print(f"❌ DB init error: {e}")
 
 # ============================================================================
-# HELPER FUNCTIONS
+# HELPERS
 # ============================================================================
 
 def row_to_schedule(row):
     return {
-        'id': row['id'],
-        'name': row['name'],
-        'mode': row['mode'],
-        'isDefault': row['is_default'],
-        'isSystem': row['is_system'],
-        'color': row['color'] if row['color'] else DEFAULT_COLORS.get(row['mode'], DEFAULT_COLORS["Normal"]),
-        'bellSoundId': row['bell_sound_id'],
-        'times': row['times'] if row['times'] else []
+        'id':       row['id'],
+        'code':     row['code'],
+        'name':     row['name'],
+        'color':    row['color'],
+        'isAddon':  row['is_addon'],
+        'isNormal': row['is_normal'],
+        'bellSlot': row['bell_slot'] if row['bell_slot'] is not None else 0,
+        'times':    row['times'] if row['times'] else [],
     }
 
-def row_to_assignment(row):
-    a = {
-        'id': row['id'],
-        'date': row['date'],
-        'scheduleId': row['schedule_id'],
-        'description': row['description'] or ''
+def row_to_table_row(row):
+    return {
+        'id':      row['id'],
+        'code':    row['code'],
+        'from':    row['from_date'],
+        'to':      row['to_date'] or '',
+        'comment': row['comment'] or '',
     }
-    if row.get('custom_times'):
-        a['customTimes'] = row['custom_times']
-    if row.get('bell_sound_id'):
-        a['bellSoundId'] = row['bell_sound_id']
-    return a
-
-def get_ringtone_slot(filename, mappings):
-    """Return the slot number (as string) for a filename, or space if not mapped."""
-    if not filename:
-        return ' '
-    for slot, mapped_filename in mappings.items():
-        if mapped_filename == filename:
-            return str(slot)
-    return ' '
 
 # ============================================================================
-# PUBLIC URL ENDPOINTS
-# ============================================================================
-
-@app.route('/public/ringtimes', methods=['GET'])
-def public_ringtimes():
-    try:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM schedules WHERE is_system = FALSE ORDER BY is_default DESC, name")
-        schedules = [row_to_schedule(r) for r in cur.fetchall()]
-
-        cur.execute("SELECT slot, filename FROM ringtone_mappings ORDER BY slot")
-        mappings = {str(row['slot']): row['filename'] for row in cur.fetchall()}
-
-        cur.close()
-        conn.close()
-
-        lines = []
-        lines.append("# Bell Schedule - ringtimes file")
-        lines.append("# Live from Bell Schedule Management System")
-        lines.append(f"# Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        lines.append("#")
-        lines.append("# Format: HH:MMsR Description")
-        lines.append("#   s = schedule code (space=Normal, A-Z=Special)")
-        lines.append("#   R = ringtone slot (space=default, 0-9=slot number, -=mute)")
-        lines.append("#")
-
-        schedule_codes = {}
-        normal_schedule = None
-        special_schedules = []
-
-        for schedule in schedules:
-            if schedule.get('isDefault'):
-                normal_schedule = schedule
-            else:
-                special_schedules.append(schedule)
-
-        used_codes = set()
-        all_letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-        for schedule in special_schedules:
-            preferred = schedule['name'][0].upper() if schedule['name'] else 'A'
-            if preferred in all_letters and preferred not in used_codes:
-                schedule_codes[schedule['id']] = preferred
-                used_codes.add(preferred)
-            else:
-                for letter in all_letters:
-                    if letter not in used_codes:
-                        schedule_codes[schedule['id']] = letter
-                        used_codes.add(letter)
-                        break
-
-        if normal_schedule and normal_schedule.get('times'):
-            r_digit = get_ringtone_slot(normal_schedule.get('bellSoundId'), mappings)
-            lines.append("")
-            lines.append(f"# Normal Schedule: {normal_schedule['name']}")
-            for time_entry in normal_schedule['times']:
-                time_str = time_entry['time']
-                description = time_entry.get('description', '')
-                lines.append(f"{time_str} {r_digit} {description}")
-
-        for schedule in special_schedules:
-            if not schedule.get('times'):
-                continue
-            schedule_code = schedule_codes.get(schedule['id'], 'X')
-            r_digit = get_ringtone_slot(schedule.get('bellSoundId'), mappings)
-            lines.append("")
-            lines.append(f"# Special Schedule ({schedule_code}): {schedule['name']}")
-            for time_entry in schedule['times']:
-                time_str = time_entry['time']
-                description = time_entry.get('description', '')
-                lines.append(f"{time_str}{schedule_code}{r_digit} {description}")
-
-        return Response('\n'.join(lines), mimetype='text/plain')
-
-    except Exception as e:
-        print(f"Error generating ringtimes: {e}")
-        return Response(f"# Error: {str(e)}", mimetype='text/plain'), 500
-
-
-@app.route('/public/ringdates', methods=['GET'])
-def public_ringdates():
-    try:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM schedules WHERE is_system = FALSE ORDER BY is_default DESC, name")
-        schedules = [row_to_schedule(r) for r in cur.fetchall()]
-        cur.execute("SELECT * FROM assignments ORDER BY date")
-        assignments = [row_to_assignment(r) for r in cur.fetchall()]
-        cur.close()
-        conn.close()
-
-        lines = []
-        lines.append("# Bell Schedule - ringdates file")
-        lines.append("# Live from Bell Schedule Management System")
-        lines.append(f"# Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        lines.append("#")
-        lines.append("# Format: YYYY-MM-DDsP Description")
-        lines.append("#")
-
-        # Build schedule codes - only for special (non-default) schedules
-        schedule_codes = {}
-        special_schedules = []
-        for schedule in schedules:
-            if not schedule.get('isDefault'):
-                special_schedules.append(schedule)
-
-        used_codes = set()
-        all_letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-        for schedule in special_schedules:
-            preferred = schedule['name'][0].upper() if schedule['name'] else 'A'
-            if preferred in all_letters and preferred not in used_codes:
-                schedule_codes[schedule['id']] = preferred
-                used_codes.add(preferred)
-            else:
-                for letter in all_letters:
-                    if letter not in used_codes:
-                        schedule_codes[schedule['id']] = letter
-                        used_codes.add(letter)
-                        break
-
-        for assignment in assignments:
-            date_str = assignment['date']
-            schedule_id = assignment['scheduleId']
-            description = assignment.get('description', '')
-
-            if schedule_id == 'system-no-bell':
-                # No-Bells day: space at position 10
-                lines.append(f"{date_str}   {description if description else 'No Bells'}")
-            else:
-                schedule_code = schedule_codes.get(schedule_id)
-                if not schedule_code:
-                    # This is the default/normal schedule - skip it, piring handles it automatically
-                    continue
-                lines.append(f"{date_str}{schedule_code}  {description}")
-
-        return Response('\n'.join(lines), mimetype='text/plain')
-
-    except Exception as e:
-        print(f"Error generating ringdates: {e}")
-        return Response(f"# Error: {str(e)}", mimetype='text/plain'), 500
-
-
-# ============================================================================
-# AUTHENTICATION
+# AUTH
 # ============================================================================
 
 def login_required(f):
     @wraps(f)
-    def decorated_function(*args, **kwargs):
+    def decorated(*args, **kwargs):
         if 'logged_in' not in session:
             return jsonify({'error': 'Not authenticated'}), 401
         return f(*args, **kwargs)
-    return decorated_function
+    return decorated
 
 @app.route('/api/login', methods=['POST', 'OPTIONS'])
 def login():
-    if request.method == 'OPTIONS':
-        return '', 200
-    data = request.get_json()
+    if request.method == 'OPTIONS': return '', 200
+    data  = request.get_json()
     email = data.get('email', '').strip().lower()
-    password = data.get('password', '')
-    user = USERS.get(email)
-    if user and check_password_hash(user['password_hash'], password):
+    pwd   = data.get('password', '')
+    user  = USERS.get(email)
+    if user and check_password_hash(user['password_hash'], pwd):
         session.permanent = True
         session['logged_in'] = True
-        session['user'] = email
-        session['name'] = user['name']
-        print(f"✅ Login successful for {email}")
+        session['user']      = email
+        session['name']      = user['name']
         return jsonify({'success': True, 'user': {'email': email, 'name': user['name']}})
-    print(f"❌ Login failed for {email}")
     return jsonify({'error': 'Invalid email or password'}), 401
 
 @app.route('/api/logout', methods=['POST', 'OPTIONS'])
 def logout():
-    if request.method == 'OPTIONS':
-        return '', 200
+    if request.method == 'OPTIONS': return '', 200
     session.clear()
     return jsonify({'success': True})
 
 @app.route('/api/check-auth', methods=['GET', 'OPTIONS'])
 def check_auth():
-    if request.method == 'OPTIONS':
-        return '', 200
-    print(f"🔍 Check auth - Session data: {dict(session)}")
+    if request.method == 'OPTIONS': return '', 200
     if 'logged_in' in session:
         return jsonify({'authenticated': True, 'user': {'email': session.get('user'), 'name': session.get('name')}})
-    print("❌ Not authenticated - no session")
     return jsonify({'authenticated': False}), 401
+
+# ============================================================================
+# SCHEDULES API
+# ============================================================================
+
+@app.route('/api/schedules', methods=['GET'])
+@login_required
+def get_schedules():
+    conn = get_db(); cur = conn.cursor()
+    # Normal first, then rest alphabetically
+    cur.execute("SELECT * FROM schedules ORDER BY is_normal DESC, code")
+    schedules = [row_to_schedule(r) for r in cur.fetchall()]
+    cur.close(); conn.close()
+    return jsonify(schedules)
+
+@app.route('/api/schedules', methods=['POST'])
+@login_required
+def create_schedule():
+    data = request.json
+    if not data.get('code') or not data.get('name'):
+        return jsonify({'error': 'code and name are required'}), 400
+    sid = str(int(datetime.now().timestamp() * 1000))
+    conn = get_db(); cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO schedules (id, code, name, color, is_addon, is_normal, bell_slot, times)
+            VALUES (%s, %s, %s, %s, %s, FALSE, %s, %s) RETURNING *
+        """, (sid, data['code'], data['name'],
+              data.get('color', '#2a5298'),
+              data.get('isAddon', False),
+              data.get('bellSlot', 0),
+              json.dumps(data.get('times', []))))
+        row = cur.fetchone(); conn.commit()
+    except psycopg2.errors.UniqueViolation:
+        conn.rollback(); cur.close(); conn.close()
+        return jsonify({'error': f"Code '{data['code']}' already exists"}), 409
+    cur.close(); conn.close()
+    return jsonify(row_to_schedule(row)), 201
+
+@app.route('/api/schedules/<sid>', methods=['PUT'])
+@login_required
+def update_schedule(sid):
+    data = request.json
+    conn = get_db(); cur = conn.cursor()
+    # Protect is_normal — cannot be changed via the API
+    cur.execute("""
+        UPDATE schedules
+        SET code=%s, name=%s, color=%s, is_addon=%s, bell_slot=%s, times=%s
+        WHERE id=%s RETURNING *
+    """, (data.get('code'), data.get('name'),
+          data.get('color', '#2a5298'),
+          data.get('isAddon', False),
+          data.get('bellSlot', 0),
+          json.dumps(data.get('times', [])),
+          sid))
+    row = cur.fetchone(); conn.commit(); cur.close(); conn.close()
+    if not row: return jsonify({'error': 'Not found'}), 404
+    return jsonify(row_to_schedule(row))
+
+@app.route('/api/schedules/<sid>', methods=['DELETE'])
+@login_required
+def delete_schedule(sid):
+    conn = get_db(); cur = conn.cursor()
+    # Prevent deleting the Normal schedule
+    cur.execute("SELECT is_normal FROM schedules WHERE id=%s", (sid,))
+    row = cur.fetchone()
+    if not row:
+        cur.close(); conn.close()
+        return jsonify({'error': 'Not found'}), 404
+    if row['is_normal']:
+        cur.close(); conn.close()
+        return jsonify({'error': 'Cannot delete the Normal schedule'}), 403
+    cur.execute("DELETE FROM schedules WHERE id=%s", (sid,))
+    conn.commit(); cur.close(); conn.close()
+    return jsonify({'success': True})
+
+# ============================================================================
+# TABLE ROWS API
+# ============================================================================
+
+@app.route('/api/table-rows', methods=['GET'])
+@login_required
+def get_table_rows():
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("SELECT * FROM table_rows ORDER BY from_date, code")
+    rows = [row_to_table_row(r) for r in cur.fetchall()]
+    cur.close(); conn.close()
+    return jsonify(rows)
+
+@app.route('/api/table-rows', methods=['POST'])
+@login_required
+def create_table_row():
+    data = request.json
+    if not data.get('code') or not data.get('from'):
+        return jsonify({'error': 'code and from are required'}), 400
+    rid = str(int(datetime.now().timestamp() * 1000))
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO table_rows (id, code, from_date, to_date, comment)
+        VALUES (%s, %s, %s, %s, %s) RETURNING *
+    """, (rid, data['code'], data['from'], data.get('to') or None, data.get('comment', '')))
+    row = cur.fetchone(); conn.commit(); cur.close(); conn.close()
+    return jsonify(row_to_table_row(row)), 201
+
+@app.route('/api/table-rows/date/<date_str>', methods=['PUT'])
+@login_required
+def replace_date_rows(date_str):
+    """Replace all single-date rows for a date (used by DayEditPanel)."""
+    data = request.json  # list of {code, comment}
+    conn = get_db(); cur = conn.cursor()
+    cur.execute(
+        "DELETE FROM table_rows WHERE from_date=%s AND (to_date IS NULL OR to_date='')",
+        (date_str,)
+    )
+    created = []
+    for i, item in enumerate(data):
+        rid = str(int(datetime.now().timestamp() * 1000)) + str(i)
+        cur.execute("""
+            INSERT INTO table_rows (id, code, from_date, to_date, comment)
+            VALUES (%s, %s, %s, NULL, %s) RETURNING *
+        """, (rid, item['code'], date_str, item.get('comment', '')))
+        created.append(row_to_table_row(cur.fetchone()))
+    conn.commit(); cur.close(); conn.close()
+    return jsonify(created)
+
+@app.route('/api/table-rows/<rid>', methods=['PUT'])
+@login_required
+def update_table_row(rid):
+    data = request.json
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("""
+        UPDATE table_rows SET code=%s, from_date=%s, to_date=%s, comment=%s
+        WHERE id=%s RETURNING *
+    """, (data.get('code'), data.get('from'), data.get('to') or None, data.get('comment', ''), rid))
+    row = cur.fetchone(); conn.commit(); cur.close(); conn.close()
+    if not row: return jsonify({'error': 'Not found'}), 404
+    return jsonify(row_to_table_row(row))
+
+@app.route('/api/table-rows/<rid>', methods=['DELETE'])
+@login_required
+def delete_table_row(rid):
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("DELETE FROM table_rows WHERE id=%s", (rid,))
+    conn.commit(); cur.close(); conn.close()
+    return jsonify({'success': True})
 
 # ============================================================================
 # RINGTONE MAPPINGS API
@@ -354,12 +366,9 @@ def check_auth():
 @app.route('/api/ringtone-mappings', methods=['GET'])
 @login_required
 def get_ringtone_mappings():
-    conn = get_db()
-    cur = conn.cursor()
+    conn = get_db(); cur = conn.cursor()
     cur.execute("SELECT slot, filename FROM ringtone_mappings ORDER BY slot")
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
+    rows = cur.fetchall(); cur.close(); conn.close()
     mappings = {str(i): None for i in range(10)}
     for row in rows:
         mappings[str(row['slot'])] = row['filename']
@@ -369,213 +378,127 @@ def get_ringtone_mappings():
 @login_required
 def save_ringtone_mappings():
     data = request.json
-    conn = get_db()
-    cur = conn.cursor()
+    conn = get_db(); cur = conn.cursor()
     for slot_str, filename in data.items():
         try:
             slot = int(slot_str)
-            if slot < 0 or slot > 9:
-                continue
+            if not (0 <= slot <= 9): continue
             if filename:
                 cur.execute("""
-                    INSERT INTO ringtone_mappings (slot, filename)
-                    VALUES (%s, %s)
+                    INSERT INTO ringtone_mappings (slot, filename) VALUES (%s, %s)
                     ON CONFLICT (slot) DO UPDATE SET filename = EXCLUDED.filename
                 """, (slot, filename))
             else:
-                cur.execute("DELETE FROM ringtone_mappings WHERE slot = %s", (slot,))
+                cur.execute("DELETE FROM ringtone_mappings WHERE slot=%s", (slot,))
         except (ValueError, TypeError):
             continue
-    conn.commit()
-    cur.close()
-    conn.close()
-    print("🔔 Ringtone mappings saved!")
+    conn.commit(); cur.close(); conn.close()
     return jsonify({'success': True})
 
 # ============================================================================
-# SCHEDULES API
+# PUBLIC ENDPOINTS — read by Pi's bash script
 # ============================================================================
 
-@app.route('/api/schedules', methods=['GET'])
-@login_required
-def get_schedules():
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM schedules ORDER BY is_default DESC, name")
-    schedules = [row_to_schedule(r) for r in cur.fetchall()]
-    cur.close()
-    conn.close()
-    return jsonify(schedules)
+@app.route('/public/ringtimes', methods=['GET'])
+def public_ringtimes():
+    """
+    Format: HH:MMsR label
+      s = schedule code char (space = Normal, first-char-of-code = special)
+      R = ringtone slot (0-9 or - for mute)
+    All times come from the database — nothing is hardcoded.
+    """
+    try:
+        conn = get_db(); cur = conn.cursor()
+        cur.execute("SELECT * FROM schedules ORDER BY is_normal DESC, code")
+        schedules = cur.fetchall()
+        cur.execute("SELECT slot, filename FROM ringtone_mappings ORDER BY slot")
+        mappings = {str(r['slot']): r['filename'] for r in cur.fetchall()}
+        cur.close(); conn.close()
 
-@app.route('/api/schedules', methods=['POST'])
-@login_required
-def create_schedule():
-    data = request.json
-    if not data.get('name') or not data.get('mode'):
-        return jsonify({'error': 'Name and mode are required'}), 400
+        default_slot = '0'  # slot 0 = default ring
 
-    schedule_id = str(int(datetime.now().timestamp() * 1000))
-    color = data.get('color') or DEFAULT_COLORS.get(data['mode'], DEFAULT_COLORS["Normal"])
+        normal = next((s for s in schedules if s['is_normal']), None)
+        special = [s for s in schedules if not s['is_normal']]
 
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO schedules (id, name, mode, is_default, is_system, color, bell_sound_id, times)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *
-    """, (
-        schedule_id, data['name'], data['mode'],
-        data.get('isDefault', False), data.get('isSystem', False),
-        json.dumps(color), data.get('bellSoundId'),
-        json.dumps(data.get('times', []))
-    ))
-    row = cur.fetchone()
-    conn.commit()
-    cur.close()
-    conn.close()
-    print(f"🔔 Schedule created!")
-    return jsonify(row_to_schedule(row)), 201
+        lines = [
+            "# Bell Schedule - ringtimes",
+            f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            "#",
+            "# Format: HH:MMsR label",
+            "#   s = space (Normal) or first char of code (Special)",
+            "#   R = ringtone slot number, or - for mute",
+            "#",
+        ]
 
-@app.route('/api/schedules/<schedule_id>', methods=['PUT'])
-@login_required
-def update_schedule(schedule_id):
-    data = request.json
-    color = data.get('color') or DEFAULT_COLORS.get(data.get('mode', 'Normal'), DEFAULT_COLORS["Normal"])
+        if normal and normal['times']:
+            slot = str(normal['bell_slot']) if normal['bell_slot'] is not None else '0'
+            lines.append(f"# Normal Schedule: {normal['name']}")
+            for t in normal['times']:
+                r = '-' if t.get('muted') else slot
+                lines.append(f"{t['time']} {r} {t['label']}")
 
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("""
-        UPDATE schedules SET name=%s, mode=%s, is_default=%s, is_system=%s,
-        color=%s, bell_sound_id=%s, times=%s WHERE id=%s RETURNING *
-    """, (
-        data.get('name'), data.get('mode'),
-        data.get('isDefault', False), data.get('isSystem', False),
-        json.dumps(color), data.get('bellSoundId'),
-        json.dumps(data.get('times', [])), schedule_id
-    ))
-    row = cur.fetchone()
-    conn.commit()
-    cur.close()
-    conn.close()
-    if not row:
-        return jsonify({'error': 'Schedule not found'}), 404
-    print(f"🔔 Schedule updated!")
-    return jsonify(row_to_schedule(row))
+        for sch in special:
+            if not sch['times']:
+                continue
+            sch_char = sch['code'][0].upper()
+            slot = str(sch['bell_slot']) if sch['bell_slot'] is not None else '0'
+            lines.append("")
+            lines.append(f"# {sch['name']} ({sch['code']})")
+            for t in sch['times']:
+                r = '-' if t.get('muted') else slot
+                lines.append(f"{t['time']}{sch_char}{r} {t['label']}")
 
-@app.route('/api/schedules/<schedule_id>', methods=['DELETE'])
-@login_required
-def delete_schedule(schedule_id):
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM schedules WHERE id=%s", (schedule_id,))
-    cur.execute("DELETE FROM assignments WHERE schedule_id=%s", (schedule_id,))
-    conn.commit()
-    cur.close()
-    conn.close()
-    print(f"🔔 Schedule deleted!")
-    return jsonify({'success': True})
+        return Response('\n'.join(lines), mimetype='text/plain')
+    except Exception as e:
+        return Response(f"# Error: {str(e)}", mimetype='text/plain'), 500
 
-# ============================================================================
-# ASSIGNMENTS API
-# ============================================================================
 
-@app.route('/api/assignments', methods=['GET'])
-@login_required
-def get_assignments():
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM assignments ORDER BY date")
-    assignments = [row_to_assignment(r) for r in cur.fetchall()]
-    cur.close()
-    conn.close()
-    return jsonify(assignments)
+@app.route('/public/ringdates', methods=['GET'])
+def public_ringdates():
+    """
+    Format: YYYY-MM-DDsP comment
+      s = first char of schedule code
+    Normal weekdays are NOT listed — Pi handles those automatically.
+    """
+    try:
+        conn = get_db(); cur = conn.cursor()
+        cur.execute("SELECT * FROM table_rows ORDER BY from_date, code")
+        rows = cur.fetchall()
+        cur.close(); conn.close()
 
-@app.route('/api/assignments', methods=['POST'])
-@login_required
-def create_assignment():
-    data = request.json
-    dates = data.get('dates', [])
-    schedule_id = data.get('scheduleId')
-    description = data.get('description', '')
-    custom_times = data.get('customTimes')
-    bell_sound_id = data.get('bellSoundId')
+        lines = [
+            "# Bell Schedule - ringdates",
+            f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            "#",
+        ]
 
-    if not dates or not schedule_id:
-        return jsonify({'error': 'Dates and scheduleId are required'}), 400
+        for row in rows:
+            code    = row['code']
+            from_d  = row['from_date']
+            to_d    = row['to_date'] or from_d
+            comment = row['comment'] or ''
+            sch_char = code[0].upper()
+            try:
+                d   = datetime.strptime(from_d, '%Y-%m-%d').date()
+                end = datetime.strptime(to_d,   '%Y-%m-%d').date()
+                while d <= end:
+                    lines.append(f"{d.strftime('%Y-%m-%d')}{sch_char}  {comment}")
+                    d += timedelta(days=1)
+            except Exception:
+                pass
 
-    conn = get_db()
-    cur = conn.cursor()
-    created = []
-    for i, date in enumerate(dates):
-        assignment_id = str(int(datetime.now().timestamp() * 1000)) + str(i)
-        cur.execute("""
-            INSERT INTO assignments (id, date, schedule_id, description, custom_times, bell_sound_id)
-            VALUES (%s, %s, %s, %s, %s, %s) RETURNING *
-        """, (
-            assignment_id, date, schedule_id, description,
-            json.dumps(custom_times) if custom_times else None,
-            bell_sound_id
-        ))
-        created.append(row_to_assignment(cur.fetchone()))
-    conn.commit()
-    cur.close()
-    conn.close()
-    print(f"🔔 Assignment created!")
-    return jsonify({'success': True, 'assignments': created}), 201
+        return Response('\n'.join(lines), mimetype='text/plain')
+    except Exception as e:
+        return Response(f"# Error: {str(e)}", mimetype='text/plain'), 500
 
-@app.route('/api/assignments/<assignment_id>', methods=['PUT'])
-@login_required
-def update_assignment(assignment_id):
-    data = request.json
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("""
-        UPDATE assignments SET date=%s, schedule_id=%s, description=%s,
-        custom_times=%s, bell_sound_id=%s WHERE id=%s RETURNING *
-    """, (
-        data.get('date'), data.get('scheduleId'), data.get('description', ''),
-        json.dumps(data['customTimes']) if data.get('customTimes') else None,
-        data.get('bellSoundId'), assignment_id
-    ))
-    row = cur.fetchone()
-    conn.commit()
-    cur.close()
-    conn.close()
-    if not row:
-        return jsonify({'error': 'Assignment not found'}), 404
-    print(f"🔔 Assignment updated!")
-    return jsonify(row_to_assignment(row))
 
-@app.route('/api/assignments/<assignment_id>', methods=['DELETE'])
-@login_required
-def delete_assignment(assignment_id):
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM assignments WHERE id=%s", (assignment_id,))
-    conn.commit()
-    cur.close()
-    conn.close()
-    print(f"🔔 Assignment deleted!")
-    return jsonify({'success': True})
-
-# ============================================================================
-# STATUS ENDPOINT
-# ============================================================================
+@app.route('/', methods=['GET'])
+def index():
+    return jsonify({'message': 'Bell Schedule API', 'status': 'running'})
 
 @app.route('/api/bell', methods=['GET'])
 def bell():
-    return jsonify({
-        'status': 'ok',
-        'message': 'Bell Schedule API is running',
-        'session_config': {
-            'secure': app.config['SESSION_COOKIE_SECURE'],
-            'samesite': app.config['SESSION_COOKIE_SAMESITE'],
-            'httponly': app.config['SESSION_COOKIE_HTTPONLY']
-        },
-        'public_urls': {
-            'ringtimes': 'https://bell-web-app.onrender.com/public/ringtimes',
-            'ringdates': 'https://bell-web-app.onrender.com/public/ringdates',
-        }
-    })
+    return jsonify({'status': 'ok'})
 
 # ============================================================================
 # MAIN
@@ -583,24 +506,8 @@ def bell():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
-
-    print()
-    print("=" * 70)
-    print("🔔 BELL SCHEDULE SYSTEM - Backend API Server")
-    print("=" * 70)
-    print()
-    print("📍 PUBLIC URLs (for bash script to read):")
-    print(f"   Ringtimes: https://bell-web-app.onrender.com/public/ringtimes")
-    print(f"   Ringdates: https://bell-web-app.onrender.com/public/ringdates")
-    print()
-    print(f"🔧 Session Config:")
-    print(f"   SECURE: {app.config['SESSION_COOKIE_SECURE']}")
-    print(f"   SAMESITE: {app.config['SESSION_COOKIE_SAMESITE']}")
-    print(f"   Production Mode: {is_production}")
-    print()
-    print(f"✅ Backend running on port: {port}")
-    print("=" * 70)
-    print()
-
+    print("=" * 60)
+    print("🔔 BELL SCHEDULE SYSTEM")
+    print("=" * 60)
     init_db()
     app.run(debug=False, host='0.0.0.0', port=port)
