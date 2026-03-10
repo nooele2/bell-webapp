@@ -456,12 +456,14 @@ def public_ringtimes():
 @app.route('/public/ringdates', methods=['GET'])
 def public_ringdates():
     """
-    Format: YYYY-MM-DDsP comment
-      s = first char of schedule code
-    Normal weekdays are NOT listed — Pi handles those automatically.
+    Format: YYYY-MM-DDsP | YYYY-MM-DD/YYYY-MM-DDsP
+      s = first char of schedule code (uppercase)
+      P = + if addon (runs in addition to Normal), empty if replacement
     """
     try:
         conn = get_db(); cur = conn.cursor()
+        cur.execute("SELECT code, is_addon FROM schedules")
+        sch_map = {r['code']: r['is_addon'] for r in cur.fetchall()}
         cur.execute("SELECT * FROM table_rows ORDER BY from_date, code")
         rows = cur.fetchall()
         cur.close(); conn.close()
@@ -473,19 +475,18 @@ def public_ringdates():
         ]
 
         for row in rows:
-            code    = row['code']
-            from_d  = row['from_date']
-            to_d    = row['to_date'] or from_d
-            comment = row['comment'] or ''
+            code     = row['code']
+            from_d   = row['from_date']
+            to_d     = row['to_date'] or ''
+            comment  = row['comment'] or ''
+            is_addon = sch_map.get(code, False)
             sch_char = code[0].upper()
-            try:
-                d   = datetime.strptime(from_d, '%Y-%m-%d').date()
-                end = datetime.strptime(to_d,   '%Y-%m-%d').date()
-                while d <= end:
-                    lines.append(f"{d.strftime('%Y-%m-%d')}{sch_char}  {comment}")
-                    d += timedelta(days=1)
-            except Exception:
-                pass
+            suffix   = '+' if is_addon else ''
+
+            if to_d and to_d != from_d:
+                lines.append(f"{from_d}/{to_d}{sch_char}{suffix}  {comment}")
+            else:
+                lines.append(f"{from_d}{sch_char}{suffix}  {comment}")
 
         return Response('\n'.join(lines), mimetype='text/plain')
     except Exception as e:
