@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import AppHeader     from "../components/AppHeader";
-import TodaySchedulePanel from "../components/TodaySchedulePanel";
 import CalendarView  from "../components/CalendarView";
 import TableView     from "../components/TableView";
 import SchedulesView from "../components/SchedulesView";
