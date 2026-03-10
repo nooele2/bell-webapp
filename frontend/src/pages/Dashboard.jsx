@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import AppHeader     from "../components/AppHeader";
+import DailyPanel    from "../components/DailyPanel";
 import CalendarView  from "../components/CalendarView";
 import TableView     from "../components/TableView";
 import SchedulesView from "../components/SchedulesView";
@@ -61,7 +62,7 @@ export default function Dashboard({ user, onLogout }) {
           <RingtoneSetup onBack={() => setShowRingtone(false)}/>
         ) : (
           <>
-            {tab === "today"     && <TodaySchedulePanel {...viewProps} onGoCreate={() => setTab("schedules")}/>}
+            {tab === "today"     && <DailyPanel    {...viewProps} onGoCreate={() => setTab("schedules")}/>}
             {tab === "calendar"  && <CalendarView  {...viewProps} onGoCreate={() => setTab("schedules")}/>}
             {tab === "table"     && <TableView     {...viewProps}/>}
             {tab === "schedules" && <SchedulesView schedules={schedules} onReload={loadData}/>}
