@@ -5,7 +5,7 @@ import CodeBadge from "./CodeBadge";
 import { C } from "../constants/theme";
 import { todayStr, todayLabel, getThisWeekDays, getRowsForDate, getSchColor, buildBellTimes, toMins } from "../utils/scheduleUtils";
 
-export default function TodayView({ schedules, tableRows, onReload, onGoCreate }) {
+export default function TodaySchedulePanel({ schedules, tableRows, onReload, onGoCreate }) {
   const [editingDate, setEditingDate] = useState(null);
   const [now, setNow] = useState(new Date());
 
