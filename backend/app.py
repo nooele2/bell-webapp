@@ -480,7 +480,8 @@ def public_ringdates():
             to_d     = row['to_date'] or ''
             comment  = row['comment'] or ''
             is_addon = sch_map.get(code, False)
-            sch_char = code[0]  # preserve case — lowercase vs uppercase are different schedules
+            sch_char = code[0]  # preserve case
+            suffix   = '+' if is_addon else ''
 
             if to_d and to_d != from_d:
                 lines.append(f"{from_d}/{to_d}{sch_char}{suffix}  {comment}")
@@ -507,7 +508,7 @@ def bell():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
     print("=" * 60)
-    print(" BELL SCHEDULE SYSTEM")
+    print("BELL SCHEDULE SYSTEM")
     print("=" * 60)
     init_db()
     app.run(debug=False, host='0.0.0.0', port=port)
