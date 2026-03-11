@@ -1,6 +1,6 @@
 export const API_BASE_URL = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api`
-  : 'http://localhost:5001/api';
+  : 'http://192.168.5.25:5001/api';
 
 const apiCall = async (endpoint, options = {}) => {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {

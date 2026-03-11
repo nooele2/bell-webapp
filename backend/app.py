@@ -21,7 +21,8 @@ CORS(app,
      origins=[
          'http://localhost:5173',
          'http://localhost:3000',
-         'https://bell-webapp.vercel.app'
+         'https://bell-webapp.vercel.app',
+         'http://192.168.5.25:3000'
      ],
      supports_credentials=True,
      allow_headers=['Content-Type', 'Authorization'],
