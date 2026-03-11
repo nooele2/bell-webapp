@@ -7,14 +7,23 @@ import { createTableRow, updateTableRow, deleteTableRow } from "../services/api"
 
 const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
-const SCHOOL_YEARS = [
-  { label:"2025/2026", from:"2025-08-01", to:"2026-07-31" },
-  { label:"2024/2025", from:"2024-08-01", to:"2025-07-31" },
-  { label:"2023/2024", from:"2023-08-01", to:"2024-07-31" },
-  { label:"2022/2023", from:"2022-08-01", to:"2023-07-31" },
-  { label:"2021/2022", from:"2021-08-01", to:"2022-07-31" },
-  { label:"2020/2021", from:"2020-08-01", to:"2021-07-31" },
-];
+// Auto-generate school years (current + 5 previous, extends automatically each year)
+function generateSchoolYears(count = 6) {
+  const years = [];
+  const today = new Date();
+  const currentYear = today.getMonth() >= 7 ? today.getFullYear() : today.getFullYear() - 1;
+  for (let i = 0; i < count; i++) {
+    const y = currentYear - i;
+    years.push({
+      label: `${y}/${y + 1}`,
+      from:  `${y}-08-01`,
+      to:    `${y + 1}-07-31`,
+    });
+  }
+  return years;
+}
+
+const SCHOOL_YEARS = generateSchoolYears();
 
 function getCurrentYearLabel() {
   const today = todayStr();
@@ -25,7 +34,7 @@ export default function TableView({ schedules, tableRows, onReload }) {
   const TODAY      = todayStr();
   const normalCode = schedules.find(s => s.isNormal)?.code || "";
 
-  // ── Academic year selector (always visible, drives the data shown) ────────
+  // ── Academic year selector ────────────────────────────────────────────────
   const [activeYear, setActiveYear] = useState(getCurrentYearLabel);
 
   // ── Inline add / edit ────────────────────────────────────────────────────
@@ -48,10 +57,10 @@ export default function TableView({ schedules, tableRows, onReload }) {
   const [yearDuping,    setYearDuping]    = useState(false);
 
   // ── Auto-fill recurring ──────────────────────────────────────────────────
-  const [showRecur,    setShowRecur]    = useState(false);
-  const [recur,        setRecur]        = useState({ code:"", dow:"2", from:"", to:"", comment:"" });
-  const [recurError,   setRecurError]   = useState("");
-  const [recurSaving,  setRecurSaving]  = useState(false);
+  const [showRecur,   setShowRecur]   = useState(false);
+  const [recur,       setRecur]       = useState({ code:"", dow:"2", from:"", to:"", comment:"" });
+  const [recurError,  setRecurError]  = useState("");
+  const [recurSaving, setRecurSaving] = useState(false);
 
   // ── Styles ───────────────────────────────────────────────────────────────
   const inputStyle = { padding:"7px 9px", borderRadius:"7px", border:`1.5px solid ${C.navyLight}40`, fontSize:"13px", background:C.white, boxSizing:"border-box", width:"100%", outline:"none" };
@@ -59,8 +68,8 @@ export default function TableView({ schedules, tableRows, onReload }) {
   const grid       = { display:"grid", gridTemplateColumns:"110px 120px 120px 1fr 52px", padding:"10px 20px", alignItems:"center", gap:"8px" };
 
   // ── Data for current year ────────────────────────────────────────────────
-  const yearRange   = SCHOOL_YEARS.find(y => y.label === activeYear);
-  const yearRows    = useMemo(() => {
+  const yearRange = SCHOOL_YEARS.find(y => y.label === activeYear);
+  const yearRows  = useMemo(() => {
     if (!yearRange) return tableRows;
     return tableRows.filter(r => r.from >= yearRange.from && r.from <= yearRange.to);
   }, [tableRows, yearRange, activeYear]);
@@ -156,7 +165,7 @@ export default function TableView({ schedules, tableRows, onReload }) {
     finally { setYearDuping(false); }
   };
 
-  // ── Sort button component ─────────────────────────────────────────────────
+  // ── Sort button ───────────────────────────────────────────────────────────
   const SortBtn = ({ label, asc, desc }) => {
     const isAsc = sortKey === asc, isDesc = sortKey === desc, active = isAsc || isDesc;
     return (
@@ -208,7 +217,6 @@ export default function TableView({ schedules, tableRows, onReload }) {
                   </div>
                 </div>
 
-                {/* Summary */}
                 {copyFrom === copyTo ? (
                   <div style={{ background:"#fdf2f2", border:`1px solid #f5c6c6`, borderRadius:"8px", padding:"10px 14px", fontSize:"13px", color:C.danger, marginBottom:"16px" }}>
                     Source and destination must be different.
@@ -226,7 +234,7 @@ export default function TableView({ schedules, tableRows, onReload }) {
 
                 <div style={{ display:"flex", gap:"8px" }}>
                   <button onClick={duplicateYear} disabled={!canCopy || yearDuping}
-                    style={{ flex:1, background:canCopy ? C.navy : C.offwhite, color:canCopy ? C.white : C.textMuted, border:"none", borderRadius:"8px", padding:"12px", fontWeight:700, fontSize:"14px", cursor:canCopy?"pointer":"not-allowed", transition:"background 0.15s" }}>
+                    style={{ flex:1, background:canCopy ? C.navy : C.offwhite, color:canCopy ? C.white : C.textMuted, border:"none", borderRadius:"8px", padding:"12px", fontWeight:700, fontSize:"14px", cursor:canCopy?"pointer":"not-allowed" }}>
                     {yearDuping ? "Copying…" : `Copy ${fromRows.length} rows →`}
                   </button>
                   <button onClick={() => setShowCopyModal(false)}
@@ -279,9 +287,8 @@ export default function TableView({ schedules, tableRows, onReload }) {
         </div>
       )}
 
-      {/* ── Title row: year title + dropdown + action buttons ── */}
+      {/* ── Title row ── */}
       <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", flexWrap:"wrap", gap:"12px" }}>
-        {/* Left: title + year dropdown */}
         <div>
           <div style={{ display:"flex", alignItems:"center", gap:"10px", flexWrap:"wrap" }}>
             <div style={{ fontSize:"20px", fontWeight:800, color:C.navy }}>
@@ -293,7 +300,6 @@ export default function TableView({ schedules, tableRows, onReload }) {
               </span>
             )}
           </div>
-          {/* Year switcher inline below title */}
           <div style={{ display:"flex", alignItems:"center", gap:"8px", marginTop:"8px" }}>
             <span style={{ fontSize:"12px", fontWeight:700, color:C.textMuted, textTransform:"uppercase", letterSpacing:"0.05em" }}>Year:</span>
             <div style={{ position:"relative", display:"inline-flex", alignItems:"center" }}>
@@ -309,7 +315,6 @@ export default function TableView({ schedules, tableRows, onReload }) {
           </div>
         </div>
 
-        {/* Right: action buttons */}
         <div style={{ display:"flex", gap:"8px", flexWrap:"wrap", alignItems:"center" }}>
           <button onClick={() => { setCopyFrom(isCurrentYear ? SCHOOL_YEARS[1].label : activeYear); setCopyTo(SCHOOL_YEARS[0].label); setShowCopyModal(true); }}
             style={{ background:"#fdf8ee", color:"#92600a", border:"1.5px solid #fcd34d", borderRadius:"10px", padding:"10px 16px", fontSize:"13px", fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:"6px" }}>
@@ -328,7 +333,6 @@ export default function TableView({ schedules, tableRows, onReload }) {
 
       {/* ── Sort & Filter bar ── */}
       <div style={{ background:C.white, borderRadius:"10px", border:`1px solid ${C.border}`, padding:"12px 16px", display:"flex", gap:"10px", flexWrap:"wrap", alignItems:"center" }}>
-        {/* Label */}
         <div style={{ display:"flex", alignItems:"center", gap:"5px", color:activeFilters > 0 ? C.navyLight : C.textMuted }}>
           <Filter size={13}/>
           <span style={{ fontSize:"12px", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.05em" }}>Filter</span>
@@ -337,14 +341,12 @@ export default function TableView({ schedules, tableRows, onReload }) {
           )}
         </div>
 
-        {/* Code */}
         <select value={filterCode} onChange={e => setFilterCode(e.target.value)}
           style={{ padding:"6px 10px", borderRadius:"7px", border:`1.5px solid ${filterCode ? C.navyLight+"60" : C.border}`, fontSize:"12px", background:filterCode?"#eef3fc":C.white, color:filterCode?C.navyLight:C.textMuted, fontWeight:700, outline:"none", cursor:"pointer" }}>
           <option value="">All Codes</option>
           {uniqueCodes.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
 
-        {/* Type */}
         <select value={filterType} onChange={e => setFilterType(e.target.value)}
           style={{ padding:"6px 10px", borderRadius:"7px", border:`1.5px solid ${filterType ? C.navyLight+"60" : C.border}`, fontSize:"12px", background:filterType?"#eef3fc":C.white, color:filterType?C.navyLight:C.textMuted, fontWeight:700, outline:"none", cursor:"pointer" }}>
           <option value="">All Types</option>
@@ -352,7 +354,6 @@ export default function TableView({ schedules, tableRows, onReload }) {
           <option value="range">Ranges only</option>
         </select>
 
-        {/* Month */}
         <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
           style={{ padding:"6px 10px", borderRadius:"7px", border:`1.5px solid ${filterMonth ? C.navyLight+"60" : C.border}`, fontSize:"12px", background:filterMonth?"#eef3fc":C.white, color:filterMonth?C.navyLight:C.textMuted, fontWeight:700, outline:"none", cursor:"pointer" }}>
           <option value="">All Months</option>
@@ -365,12 +366,10 @@ export default function TableView({ schedules, tableRows, onReload }) {
 
         <div style={{ width:"1px", height:"20px", background:C.border }}/>
 
-        {/* Sort */}
         <span style={{ fontSize:"11px", fontWeight:700, color:C.textMuted, textTransform:"uppercase", letterSpacing:"0.05em" }}>Sort</span>
         <SortBtn label="Date"           asc="date_asc"  desc="date_desc"/>
         <SortBtn label="Recently Added" asc="added_asc" desc="added_desc"/>
 
-        {/* Clear */}
         {(filterCode || filterType || filterMonth || sortKey !== "date_asc") && (
           <button onClick={() => { setFilterCode(""); setFilterType(""); setFilterMonth(""); setSortKey("date_asc"); }}
             style={{ marginLeft:"auto", background:"none", border:"none", cursor:"pointer", fontSize:"12px", color:C.textMuted, display:"flex", alignItems:"center", gap:"4px", fontWeight:600 }}>
@@ -378,7 +377,6 @@ export default function TableView({ schedules, tableRows, onReload }) {
           </button>
         )}
 
-        {/* Row count */}
         <span style={{ marginLeft:(filterCode||filterType||filterMonth||sortKey!=="date_asc")?"0":"auto", fontSize:"12px", color:C.textLight, fontWeight:600 }}>
           {visibleRows.length} of {yearRows.length}
         </span>
@@ -391,7 +389,6 @@ export default function TableView({ schedules, tableRows, onReload }) {
           {["Code","From","To","Comment",""].map(h => <div key={h} style={colStyle}>{h}</div>)}
         </div>
 
-        {/* Inline add */}
         {adding && (
           <div style={{ ...grid, background:"#eef3fc", borderBottom:`1px solid #c5d8f5` }}>
             <select value={newRow.code} onChange={e=>setNewRow(p=>({...p,code:e.target.value}))} style={{...inputStyle,fontFamily:"monospace",fontWeight:700}}>
@@ -408,7 +405,6 @@ export default function TableView({ schedules, tableRows, onReload }) {
           </div>
         )}
 
-        {/* Data rows */}
         {visibleRows.map((row, i) => {
           const isEditing = editingId === row.id;
           const color     = getSchColor(row.code, schedules);
