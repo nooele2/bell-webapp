@@ -18,16 +18,10 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-in-production')
 
 CORS(app,
-     origins=[
-         'http://localhost:5173',
-         'http://localhost:3000',
-         'https://bell-webapp.vercel.app',
-         'http://192.168.5.25:3000'
-     ],
-     supports_credentials=True,
+     origins="*",
+     supports_credentials=False,
      allow_headers=['Content-Type', 'Authorization'],
-     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-     expose_headers=['Set-Cookie'])
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
 
 is_production = os.environ.get('RENDER') is not None or os.environ.get('FLASK_ENV') == 'production'
 app.config['SESSION_COOKIE_SECURE'] = is_production
@@ -223,7 +217,6 @@ def check_auth():
 @login_required
 def get_schedules():
     conn = get_db(); cur = conn.cursor()
-    # Normal first, then rest alphabetically
     cur.execute("SELECT * FROM schedules ORDER BY is_normal DESC, code")
     schedules = [row_to_schedule(r) for r in cur.fetchall()]
     cur.close(); conn.close()
@@ -258,7 +251,6 @@ def create_schedule():
 def update_schedule(sid):
     data = request.json
     conn = get_db(); cur = conn.cursor()
-    # Protect is_normal — cannot be changed via the API
     cur.execute("""
         UPDATE schedules
         SET code=%s, name=%s, color=%s, is_addon=%s, bell_slot=%s, times=%s
@@ -277,7 +269,6 @@ def update_schedule(sid):
 @login_required
 def delete_schedule(sid):
     conn = get_db(); cur = conn.cursor()
-    # Prevent deleting the Normal schedule
     cur.execute("SELECT is_normal FROM schedules WHERE id=%s", (sid,))
     row = cur.fetchone()
     if not row:
@@ -321,8 +312,7 @@ def create_table_row():
 @app.route('/api/table-rows/date/<date_str>', methods=['PUT'])
 @login_required
 def replace_date_rows(date_str):
-    """Replace all single-date rows for a date (used by DayEditPanel)."""
-    data = request.json  # list of {code, comment}
+    data = request.json
     conn = get_db(); cur = conn.cursor()
     cur.execute(
         "DELETE FROM table_rows WHERE from_date=%s AND (to_date IS NULL OR to_date='')",
@@ -397,17 +387,11 @@ def save_ringtone_mappings():
     return jsonify({'success': True})
 
 # ============================================================================
-# PUBLIC ENDPOINTS — read by Pi's bash script
+# PUBLIC ENDPOINTS
 # ============================================================================
 
 @app.route('/public/ringtimes', methods=['GET'])
 def public_ringtimes():
-    """
-    Format: HH:MMsR label
-      s = schedule code char (space = Normal, first-char-of-code = special)
-      R = ringtone slot (0-9 or - for mute)
-    All times come from the database — nothing is hardcoded.
-    """
     try:
         conn = get_db(); cur = conn.cursor()
         cur.execute("SELECT * FROM schedules ORDER BY is_normal DESC, code")
@@ -415,8 +399,6 @@ def public_ringtimes():
         cur.execute("SELECT slot, filename FROM ringtone_mappings ORDER BY slot")
         mappings = {str(r['slot']): r['filename'] for r in cur.fetchall()}
         cur.close(); conn.close()
-
-        default_slot = '0'  # slot 0 = default ring
 
         normal = next((s for s in schedules if s['is_normal']), None)
         special = [s for s in schedules if not s['is_normal']]
@@ -441,7 +423,7 @@ def public_ringtimes():
         for sch in special:
             if not sch['times']:
                 continue
-            sch_char = sch['code'][0]  # preserve case
+            sch_char = sch['code'][0]
             slot = str(sch['bell_slot']) if sch['bell_slot'] is not None else '0'
             lines.append("")
             lines.append(f"# {sch['name']} ({sch['code']})")
@@ -456,11 +438,6 @@ def public_ringtimes():
 
 @app.route('/public/ringdates', methods=['GET'])
 def public_ringdates():
-    """
-    Format: YYYY-MM-DDsP | YYYY-MM-DD/YYYY-MM-DDsP
-      s = first char of schedule code (uppercase)
-      P = + if addon (runs in addition to Normal), empty if replacement
-    """
     try:
         conn = get_db(); cur = conn.cursor()
         cur.execute("SELECT code, is_addon FROM schedules")
@@ -481,7 +458,7 @@ def public_ringdates():
             to_d     = row['to_date'] or ''
             comment  = row['comment'] or ''
             is_addon = sch_map.get(code, False)
-            sch_char = code[0]  # preserve case
+            sch_char = code[0]
             suffix   = '+' if is_addon else ''
 
             if to_d and to_d != from_d:
