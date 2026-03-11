@@ -18,10 +18,11 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-in-production')
 
 CORS(app,
-     origins="*",
-     supports_credentials=False,
+     origins=["http://192.168.5.25:3000", "http://localhost:3000", "http://localhost:5173", "https://bell-webapp.vercel.app"],
+     supports_credentials=True,
      allow_headers=['Content-Type', 'Authorization'],
-     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+     expose_headers=['Set-Cookie'])
 
 is_production = os.environ.get('RENDER') is not None or os.environ.get('FLASK_ENV') == 'production'
 app.config['SESSION_COOKIE_SECURE'] = is_production
