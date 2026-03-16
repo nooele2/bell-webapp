@@ -51,3 +51,8 @@ export default {
   get: (endpoint) => apiCall(endpoint, { method: 'GET' }),
   post: (endpoint, data) => apiCall(endpoint, { method: 'POST', body: JSON.stringify(data) }),
 };
+
+// School Years
+export const getSchoolYears   = ()     => apiCall('/school-years', { method: 'GET' });
+export const createSchoolYear = (data) => apiCall('/school-years', { method: 'POST', body: JSON.stringify(data) });
+export const deleteSchoolYear = (id)   => apiCall(`/school-years/${id}`, { method: 'DELETE' });
