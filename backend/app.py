@@ -53,12 +53,10 @@ def get_db():
     return conn
 
 def init_db():
-    """Create/migrate tables and seed default data if empty."""
     try:
         conn = get_db()
         cur = conn.cursor()
 
-        # schedules table — is_normal marks the baseline Normal schedule
         cur.execute("""
             CREATE TABLE IF NOT EXISTS schedules (
                 id TEXT PRIMARY KEY,
@@ -71,15 +69,9 @@ def init_db():
                 times JSONB DEFAULT '[]'
             )
         """)
-        # Add is_normal column if upgrading from old schema
-        cur.execute("""
-            ALTER TABLE schedules ADD COLUMN IF NOT EXISTS is_normal BOOLEAN DEFAULT FALSE
-        """)
-        cur.execute("""
-            ALTER TABLE schedules ADD COLUMN IF NOT EXISTS bell_slot INTEGER DEFAULT 0
-        """)
+        cur.execute("ALTER TABLE schedules ADD COLUMN IF NOT EXISTS is_normal BOOLEAN DEFAULT FALSE")
+        cur.execute("ALTER TABLE schedules ADD COLUMN IF NOT EXISTS bell_slot INTEGER DEFAULT 0")
 
-        # table_rows — date/range assignments
         cur.execute("""
             CREATE TABLE IF NOT EXISTS table_rows (
                 id TEXT PRIMARY KEY,
@@ -90,7 +82,6 @@ def init_db():
             )
         """)
 
-        # ringtone slot mappings
         cur.execute("""
             CREATE TABLE IF NOT EXISTS ringtone_mappings (
                 slot INTEGER PRIMARY KEY,
@@ -98,9 +89,39 @@ def init_db():
             )
         """)
 
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS school_years (
+                id TEXT PRIMARY KEY,
+                label TEXT NOT NULL UNIQUE,
+                from_date TEXT NOT NULL,
+                to_date TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+
         conn.commit()
 
-        # Seed Normal schedule if it doesn't exist yet
+        # Seed default school years if empty
+        cur.execute("SELECT COUNT(*) as count FROM school_years")
+        if cur.fetchone()['count'] == 0:
+            default_years = [
+                ("sy-2025-2026", "2025/2026", "2025-08-01", "2026-07-31"),
+                ("sy-2024-2025", "2024/2025", "2024-08-01", "2025-07-31"),
+                ("sy-2023-2024", "2023/2024", "2023-08-01", "2024-07-31"),
+                ("sy-2022-2023", "2022/2023", "2022-08-01", "2023-07-31"),
+                ("sy-2021-2022", "2021/2022", "2021-08-01", "2022-07-31"),
+                ("sy-2020-2021", "2020/2021", "2020-08-01", "2021-07-31"),
+                ("sy-2019-2020", "2019/2020", "2019-08-01", "2020-07-31"),
+            ]
+            for sid, label, from_d, to_d in default_years:
+                cur.execute("""
+                    INSERT INTO school_years (id, label, from_date, to_date)
+                    VALUES (%s, %s, %s, %s) ON CONFLICT (label) DO NOTHING
+                """, (sid, label, from_d, to_d))
+            conn.commit()
+            print("✅ Default school years seeded")
+
+        # Seed Normal schedule if empty
         cur.execute("SELECT COUNT(*) as count FROM schedules WHERE is_normal = TRUE")
         if cur.fetchone()['count'] == 0:
             cur.execute("""
@@ -108,12 +129,7 @@ def init_db():
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (code) DO NOTHING
             """, (
-                "normal-schedule",
-                "N",
-                "Normal Schedule",
-                "#1a3a6b",
-                False,
-                True,
+                "normal-schedule", "N", "Normal Schedule", "#1a3a6b", False, True,
                 json.dumps([
                     {"time": "07:55", "label": "Pre-1st period",    "muted": False},
                     {"time": "08:00", "label": "1st period",         "muted": False},
@@ -170,6 +186,14 @@ def row_to_table_row(row):
         'comment': row['comment'] or '',
     }
 
+def row_to_school_year(row):
+    return {
+        'id':    row['id'],
+        'label': row['label'],
+        'from':  row['from_date'],
+        'to':    row['to_date'],
+    }
+
 # ============================================================================
 # AUTH
 # ============================================================================
@@ -209,6 +233,47 @@ def check_auth():
     if 'logged_in' in session:
         return jsonify({'authenticated': True, 'user': {'email': session.get('user'), 'name': session.get('name')}})
     return jsonify({'authenticated': False}), 401
+
+# ============================================================================
+# SCHOOL YEARS API
+# ============================================================================
+
+@app.route('/api/school-years', methods=['GET'])
+@login_required
+def get_school_years():
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("SELECT * FROM school_years ORDER BY from_date DESC")
+    years = [row_to_school_year(r) for r in cur.fetchall()]
+    cur.close(); conn.close()
+    return jsonify(years)
+
+@app.route('/api/school-years', methods=['POST'])
+@login_required
+def create_school_year():
+    data = request.json
+    if not data.get('label') or not data.get('from') or not data.get('to'):
+        return jsonify({'error': 'label, from, and to are required'}), 400
+    sid = 'sy-' + str(int(datetime.now().timestamp() * 1000))
+    conn = get_db(); cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO school_years (id, label, from_date, to_date)
+            VALUES (%s, %s, %s, %s) RETURNING *
+        """, (sid, data['label'], data['from'], data['to']))
+        row = cur.fetchone(); conn.commit()
+    except psycopg2.errors.UniqueViolation:
+        conn.rollback(); cur.close(); conn.close()
+        return jsonify({'error': f"Year '{data['label']}' already exists"}), 409
+    cur.close(); conn.close()
+    return jsonify(row_to_school_year(row)), 201
+
+@app.route('/api/school-years/<sid>', methods=['DELETE'])
+@login_required
+def delete_school_year(sid):
+    conn = get_db(); cur = conn.cursor()
+    cur.execute("DELETE FROM school_years WHERE id=%s", (sid,))
+    conn.commit(); cur.close(); conn.close()
+    return jsonify({'success': True})
 
 # ============================================================================
 # SCHEDULES API
@@ -401,16 +466,12 @@ def public_ringtimes():
         mappings = {str(r['slot']): r['filename'] for r in cur.fetchall()}
         cur.close(); conn.close()
 
-        normal = next((s for s in schedules if s['is_normal']), None)
+        normal  = next((s for s in schedules if s['is_normal']), None)
         special = [s for s in schedules if not s['is_normal']]
 
         lines = [
             "# Bell Schedule - ringtimes",
             f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-            "#",
-            "# Format: HH:MMsR label",
-            "#   s = space (Normal) or first char of code (Special)",
-            "#   R = ringtone slot number, or - for mute",
             "#",
         ]
 
@@ -422,8 +483,7 @@ def public_ringtimes():
                 lines.append(f"{t['time']} {r} {t['label']}")
 
         for sch in special:
-            if not sch['times']:
-                continue
+            if not sch['times']: continue
             sch_char = sch['code'][0]
             slot = str(sch['bell_slot']) if sch['bell_slot'] is not None else '0'
             lines.append("")
