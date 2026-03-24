@@ -5,9 +5,9 @@ import { C } from '../constants/theme';
 
 const GITHUB_API_URL   = 'https://api.github.com/repos/pepa65/piring/contents/soundfiles';
 const AUDIO_EXTENSIONS = ['.wav'];
-const API_BASE_URL     = import.meta.env.VITE_API_URL
+const API_BASE_URL = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api`
-  : 'http://localhost:5001/api';
+  : 'http://192.168.5.25:5001/api';
 const SLOTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 export default function RingtoneSetup({ onBack }) {
