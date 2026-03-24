@@ -484,6 +484,7 @@ def public_ringtimes():
 
         for sch in special:
             if not sch['times']: continue
+            if sch['code'].startswith('#'): continue  # skip # codes
             sch_char = sch['code'][0]
             slot = str(sch['bell_slot']) if sch['bell_slot'] is not None else '0'
             lines.append("")
@@ -515,6 +516,7 @@ def public_ringdates():
 
         for row in rows:
             code     = row['code']
+            if code.startswith('#'): continue  # skip # codes
             from_d   = row['from_date']
             to_d     = row['to_date'] or ''
             comment  = row['comment'] or ''
