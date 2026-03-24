@@ -1,11 +1,17 @@
-import { useState, useMemo, useEffect } from "react";
-import { Plus, Trash2, X, RefreshCw, ArrowUp, ArrowDown, ArrowUpDown, Filter, Copy, ChevronDown, CalendarPlus, Check } from "lucide-react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { Plus, Trash2, X, RefreshCw, ArrowUp, ArrowDown, ArrowUpDown, Filter, ChevronDown, Check, Settings, Pencil } from "lucide-react";
 import CodeBadge from "./CodeBadge";
 import { C } from "../constants/theme";
 import { todayStr, getSchColor } from "../utils/scheduleUtils";
-import { createTableRow, updateTableRow, deleteTableRow, getSchoolYears, createSchoolYear, deleteSchoolYear } from "../services/api";
+import { createTableRow, updateTableRow, deleteTableRow, getSchoolYears, createSchoolYear, deleteSchoolYear, updateSchoolYear } from "../services/api";
 
 const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+
+function formatDateShort(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString("default", { month: "short", day: "numeric", year: "numeric" });
+}
 
 function getCurrentYearLabel(years) {
   const today = todayStr();
@@ -16,16 +22,25 @@ export default function TableView({ schedules, tableRows, onReload }) {
   const TODAY      = todayStr();
   const normalCode = schedules.find(s => s.isNormal)?.code || "";
 
-  // ── School years from DB ─────────────────────────────────────────────────
+  // ── School years ─────────────────────────────────────────────────────────
   const [schoolYears,   setSchoolYears]   = useState([]);
   const [yearsLoading,  setYearsLoading]  = useState(true);
   const [activeYear,    setActiveYear]    = useState("");
 
-  // ── New School Year modal ────────────────────────────────────────────────
-  const [showNewYear,   setShowNewYear]   = useState(false);
+  // ── Manage Years modal ───────────────────────────────────────────────────
+  const [showManage,    setShowManage]    = useState(false);
+  const [editingYearId, setEditingYearId] = useState(null);
+  const [editYearForm,  setEditYearForm]  = useState({ label:"", from:"", to:"" });
+  const [yearSaving,    setYearSaving]    = useState(false);
+  const [yearError,     setYearError]     = useState("");
+
+  // ── Create New Year modal ────────────────────────────────────────────────
+  const [showCreate,    setShowCreate]    = useState(false);
   const [newYear,       setNewYear]       = useState({ label:"", from:"", to:"" });
-  const [newYearSaving, setNewYearSaving] = useState(false);
-  const [newYearError,  setNewYearError]  = useState("");
+  const [copyMode,      setCopyMode]      = useState("empty"); // "empty" | "copy"
+  const [copyFromLabel, setCopyFromLabel] = useState("");
+  const [createSaving,  setCreateSaving]  = useState(false);
+  const [createError,   setCreateError]   = useState("");
 
   // ── Inline add / edit ────────────────────────────────────────────────────
   const [adding,    setAdding]    = useState(false);
@@ -40,12 +55,6 @@ export default function TableView({ schedules, tableRows, onReload }) {
   const [filterMonth, setFilterMonth] = useState("");
   const [sortKey,     setSortKey]     = useState("date_asc");
 
-  // ── Copy Year modal ───────────────────────────────────────────────────────
-  const [showCopyModal, setShowCopyModal] = useState(false);
-  const [copyFrom,      setCopyFrom]      = useState("");
-  const [copyTo,        setCopyTo]        = useState("");
-  const [yearDuping,    setYearDuping]    = useState(false);
-
   // ── Auto-fill recurring ──────────────────────────────────────────────────
   const [showRecur,   setShowRecur]   = useState(false);
   const [recur,       setRecur]       = useState({ code:"", dow:"2", from:"", to:"", comment:"" });
@@ -53,13 +62,12 @@ export default function TableView({ schedules, tableRows, onReload }) {
   const [recurSaving, setRecurSaving] = useState(false);
 
   // ── Styles ───────────────────────────────────────────────────────────────
-  const inputStyle  = { padding:"6px 8px", borderRadius:"6px", border:`1.5px solid ${C.navyLight}40`, fontSize:"12px", background:C.white, boxSizing:"border-box", width:"100%", outline:"none" };
-  const modalInput  = { padding:"9px 11px", borderRadius:"8px", border:`1.5px solid ${C.navyLight}40`, fontSize:"14px", background:C.white, boxSizing:"border-box", width:"100%", outline:"none" };
-  const colStyle    = { fontSize:"11px", fontWeight:700, color:C.textMuted, letterSpacing:"0.07em", textTransform:"uppercase" };
-  const grid        = { display:"grid", gridTemplateColumns:"100px 110px 110px 1fr auto", padding:"8px 16px", alignItems:"center", gap:"8px" };
-  const headerGrid  = { display:"grid", gridTemplateColumns:"100px 110px 110px 1fr auto", padding:"8px 16px", alignItems:"center", gap:"8px" };
+  const inputStyle = { padding:"6px 8px", borderRadius:"6px", border:`1.5px solid ${C.navyLight}40`, fontSize:"12px", background:C.white, boxSizing:"border-box", width:"100%", outline:"none" };
+  const modalInput = { padding:"9px 11px", borderRadius:"8px", border:`1.5px solid ${C.navyLight}40`, fontSize:"14px", background:C.white, boxSizing:"border-box", width:"100%", outline:"none" };
+  const colStyle   = { fontSize:"11px", fontWeight:700, color:C.textMuted, letterSpacing:"0.07em", textTransform:"uppercase" };
+  const grid       = { display:"grid", gridTemplateColumns:"100px 110px 110px 1fr auto", padding:"8px 16px", alignItems:"center", gap:"8px" };
 
-  // ── Load school years ────────────────────────────────────────────────────
+  // ── Load school years ─────────────────────────────────────────────────────
   useEffect(() => { loadYears(); }, []);
 
   const loadYears = async () => {
@@ -67,21 +75,13 @@ export default function TableView({ schedules, tableRows, onReload }) {
     try {
       const years = await getSchoolYears();
       setSchoolYears(years);
-      if (!activeYear && years.length > 0) {
-        setActiveYear(getCurrentYearLabel(years));
-      }
-      if (years.length >= 2) {
-        setCopyFrom(years[1]?.label || "");
-        setCopyTo(years[0]?.label || "");
-      }
-    } catch(e) {
-      console.error("Failed to load school years", e);
-    } finally {
-      setYearsLoading(false);
-    }
+      if (!activeYear && years.length > 0) setActiveYear(getCurrentYearLabel(years));
+      if (years.length > 0) setCopyFromLabel(years[0]?.label || "");
+    } catch(e) { console.error(e); }
+    finally { setYearsLoading(false); }
   };
 
-  // ── Data for current year ────────────────────────────────────────────────
+  // ── Data for current year ─────────────────────────────────────────────────
   const yearRange = schoolYears.find(y => y.label === activeYear);
   const yearRows  = useMemo(() => {
     if (!yearRange) return tableRows;
@@ -114,46 +114,91 @@ export default function TableView({ schedules, tableRows, onReload }) {
     return rows;
   }, [yearRows, filterCode, filterType, filterMonth, sortKey]);
 
-  const activeFilters = (filterCode ? 1 : 0) + (filterType ? 1 : 0) + (filterMonth ? 1 : 0);
-  const isCurrentYear = activeYear === getCurrentYearLabel(schoolYears);
+  const activeFilters  = (filterCode ? 1 : 0) + (filterType ? 1 : 0) + (filterMonth ? 1 : 0);
+  const currentLabel   = getCurrentYearLabel(schoolYears);
+  const isCurrentYear  = activeYear === currentLabel;
 
-  // ── New School Year ───────────────────────────────────────────────────────
-  const handleYearDateChange = (field, value) => {
+  // ── Auto-fill label from dates ────────────────────────────────────────────
+  const handleNewYearDateChange = (field, value) => {
     const updated = { ...newYear, [field]: value };
     if (updated.from && updated.to) {
-      const fromYear = updated.from.slice(0, 4);
-      const toYear   = updated.to.slice(0, 4);
-      if (fromYear !== toYear) updated.label = `${fromYear}/${toYear}`;
+      const fy = updated.from.slice(0,4), ty = updated.to.slice(0,4);
+      if (fy !== ty) updated.label = `${fy}/${ty}`;
     }
     setNewYear(updated);
   };
 
+  // ── Create Year ───────────────────────────────────────────────────────────
   const handleCreateYear = async () => {
-    setNewYearError("");
-    if (!newYear.label || !newYear.from || !newYear.to) {
-      setNewYearError("All fields are required"); return;
-    }
-    if (newYear.from >= newYear.to) {
-      setNewYearError("End date must be after start date"); return;
-    }
-    if (schoolYears.find(y => y.label === newYear.label)) {
-      setNewYearError("Academic year already exists"); return;
-    }
-    setNewYearSaving(true);
+    setCreateError("");
+    if (!newYear.label || !newYear.from || !newYear.to) { setCreateError("All fields are required"); return; }
+    if (newYear.from >= newYear.to) { setCreateError("End date must be after start date"); return; }
+    if (schoolYears.find(y => y.label === newYear.label)) { setCreateError("Academic year already exists"); return; }
+    setCreateSaving(true);
     try {
       await createSchoolYear({ label: newYear.label, from: newYear.from, to: newYear.to });
+
+      // Copy rows if selected
+      if (copyMode === "copy" && copyFromLabel) {
+        const srcYear = schoolYears.find(y => y.label === copyFromLabel);
+        const destFrom = new Date(newYear.from + "T00:00:00");
+        const srcFrom  = new Date(srcYear.from  + "T00:00:00");
+        const diff = Math.round((destFrom - srcFrom) / 86400000);
+        const rows = getRowsForYear(copyFromLabel);
+        for (const row of rows) {
+          const nf = new Date(row.from + "T00:00:00"); nf.setDate(nf.getDate() + diff);
+          const nt = row.to ? new Date(row.to + "T00:00:00") : null; if (nt) nt.setDate(nt.getDate() + diff);
+          await createTableRow({ code: row.code, from: nf.toISOString().slice(0,10), to: nt ? nt.toISOString().slice(0,10) : "", comment: row.comment });
+        }
+        await onReload();
+      }
+
       await loadYears();
       setActiveYear(newYear.label);
-      setShowNewYear(false);
+      setShowCreate(false);
       setNewYear({ label:"", from:"", to:"" });
+      setCopyMode("empty");
     } catch(e) {
-      setNewYearError(e.message || "Failed to create year");
+      setCreateError(e.message || "Failed to create year");
     } finally {
-      setNewYearSaving(false);
+      setCreateSaving(false);
     }
   };
 
-  // ── CRUD ─────────────────────────────────────────────────────────────────
+  // ── Edit Year (inline in Manage modal) ───────────────────────────────────
+  const startEditYear = (yr) => {
+    setEditingYearId(yr.id);
+    setEditYearForm({ label: yr.label, from: yr.from, to: yr.to });
+    setYearError("");
+  };
+
+  const saveEditYear = async (id) => {
+    setYearError("");
+    if (!editYearForm.label || !editYearForm.from || !editYearForm.to) { setYearError("All fields required"); return; }
+    if (editYearForm.from >= editYearForm.to) { setYearError("End must be after start"); return; }
+    setYearSaving(true);
+    try {
+      await updateSchoolYear(id, { label: editYearForm.label, from: editYearForm.from, to: editYearForm.to });
+      await loadYears();
+      if (activeYear === schoolYears.find(y => y.id === id)?.label) setActiveYear(editYearForm.label);
+      setEditingYearId(null);
+    } catch(e) {
+      setYearError(e.message || "Failed to save");
+    } finally {
+      setYearSaving(false);
+    }
+  };
+
+  const handleDeleteYear = async (yr) => {
+    if (!confirm(`Delete "${yr.label}"? This does NOT delete the schedule entries inside it.`)) return;
+    try {
+      await deleteSchoolYear(yr.id);
+      await loadYears();
+      if (activeYear === yr.label) setActiveYear(schoolYears.find(y => y.id !== yr.id)?.label || "");
+    } catch(e) { alert("Failed: " + e.message); }
+  };
+
+  // ── Table CRUD ────────────────────────────────────────────────────────────
   const handleAdd = async () => {
     if (!newRow.from) return;
     setSaving(true);
@@ -177,7 +222,7 @@ export default function TableView({ schedules, tableRows, onReload }) {
     catch(e) { alert("Failed: " + e.message); }
   };
 
-  // ── Auto-fill recurring ──────────────────────────────────────────────────
+  // ── Auto-fill recurring ───────────────────────────────────────────────────
   const generateRecurring = async () => {
     setRecurError("");
     if (!recur.code || !recur.from || !recur.to) { setRecurError("Fill in all fields"); return; }
@@ -191,26 +236,6 @@ export default function TableView({ schedules, tableRows, onReload }) {
     try { for (const d of dates) await createTableRow({ code:recur.code, from:d, to:"", comment:recur.comment }); await onReload(); setShowRecur(false); }
     catch(e) { alert("Failed: " + e.message); }
     finally { setRecurSaving(false); }
-  };
-
-  // ── Copy year ─────────────────────────────────────────────────────────────
-  const duplicateYear = async () => {
-    if (copyFrom === copyTo) return;
-    const src  = schoolYears.find(y => y.label === copyFrom);
-    const dest = schoolYears.find(y => y.label === copyTo);
-    const rows = getRowsForYear(copyFrom);
-    if (rows.length === 0) { alert("No rows found for " + copyFrom); return; }
-    const diff = Math.round((new Date(dest.from) - new Date(src.from)) / 86400000);
-    setYearDuping(true);
-    try {
-      for (const row of rows) {
-        const nf = new Date(row.from + "T00:00:00"); nf.setDate(nf.getDate() + diff);
-        const nt = row.to ? new Date(row.to + "T00:00:00") : null; if (nt) nt.setDate(nt.getDate() + diff);
-        await createTableRow({ code:row.code, from:nf.toISOString().slice(0,10), to:nt?nt.toISOString().slice(0,10):"", comment:row.comment });
-      }
-      await onReload(); setActiveYear(copyTo); setShowCopyModal(false);
-    } catch(e) { alert("Failed: " + e.message); }
-    finally { setYearDuping(false); }
   };
 
   // ── Sort button ───────────────────────────────────────────────────────────
@@ -227,118 +252,188 @@ export default function TableView({ schedules, tableRows, onReload }) {
 
   if (yearsLoading) return <div style={{ padding:"40px", textAlign:"center", color:C.textMuted }}>Loading…</div>;
 
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── Radio option style ────────────────────────────────────────────────────
+  const radioBox = (selected) => ({
+    display:"flex", alignItems:"center", gap:"10px", padding:"12px 14px", borderRadius:"9px",
+    border:`1.5px solid ${selected ? C.navyLight : C.border}`,
+    background: selected ? "#eef3fc" : C.white,
+    cursor:"pointer", transition:"all 0.15s"
+  });
+
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:"16px" }}>
 
-      {/* ── Create New Year modal ── */}
-      {showNewYear && (
+      {/* ════════════════════════════════════════
+          MANAGE YEARS MODAL
+      ════════════════════════════════════════ */}
+      {showManage && (
         <div style={{ position:"fixed", inset:0, background:"rgba(15,25,50,0.55)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:200 }}>
-          <div style={{ background:C.white, borderRadius:"16px", width:"400px", maxWidth:"95vw", boxShadow:"0 24px 64px rgba(26,58,107,0.28)", overflow:"hidden" }}>
+          <div style={{ background:C.white, borderRadius:"16px", width:"520px", maxWidth:"95vw", boxShadow:"0 24px 64px rgba(26,58,107,0.28)", overflow:"hidden", maxHeight:"85vh", display:"flex", flexDirection:"column" }}>
+            <div style={{ height:"3px", background:`linear-gradient(90deg,${C.navy},${C.red})`, flexShrink:0 }}/>
+            <div style={{ padding:"22px 26px 0", flexShrink:0 }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"18px" }}>
+                <div style={{ fontSize:"18px", fontWeight:800, color:C.navy }}>Manage Academic Years</div>
+                <button onClick={() => { setShowManage(false); setEditingYearId(null); setYearError(""); }}
+                  style={{ background:"none", border:"none", cursor:"pointer", color:C.textMuted, display:"flex", alignItems:"center" }}>
+                  <X size={18}/>
+                </button>
+              </div>
+            </div>
+
+            {/* Year list */}
+            <div style={{ overflowY:"auto", padding:"0 26px" }}>
+              {schoolYears.map((yr) => {
+                const isCurrent  = yr.label === currentLabel;
+                const isEditing  = editingYearId === yr.id;
+                const entryCount = getRowsForYear(yr.label).length;
+
+                if (isEditing) return (
+                  <div key={yr.id} style={{ background:"#eef3fc", borderRadius:"10px", padding:"14px", marginBottom:"8px", border:`1.5px solid ${C.navyLight}40` }}>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"8px", marginBottom:"10px" }}>
+                      <div>
+                        <label style={{ fontSize:"10px", fontWeight:700, color:C.textMuted, display:"block", marginBottom:"4px", textTransform:"uppercase" }}>Label</label>
+                        <input value={editYearForm.label} onChange={e=>setEditYearForm(p=>({...p,label:e.target.value}))} style={inputStyle} placeholder="2026/2027"/>
+                      </div>
+                      <div>
+                        <label style={{ fontSize:"10px", fontWeight:700, color:C.textMuted, display:"block", marginBottom:"4px", textTransform:"uppercase" }}>Start</label>
+                        <input type="date" value={editYearForm.from} onChange={e=>setEditYearForm(p=>({...p,from:e.target.value}))} style={inputStyle}/>
+                      </div>
+                      <div>
+                        <label style={{ fontSize:"10px", fontWeight:700, color:C.textMuted, display:"block", marginBottom:"4px", textTransform:"uppercase" }}>End</label>
+                        <input type="date" value={editYearForm.to} onChange={e=>setEditYearForm(p=>({...p,to:e.target.value}))} style={inputStyle}/>
+                      </div>
+                    </div>
+                    {yearError && <div style={{ fontSize:"12px", color:"#dc2626", marginBottom:"8px" }}>{yearError}</div>}
+                    <div style={{ display:"flex", gap:"6px" }}>
+                      <button onClick={() => saveEditYear(yr.id)} disabled={yearSaving}
+                        style={{ display:"flex", alignItems:"center", gap:"5px", background:C.navy, color:C.white, border:"none", borderRadius:"7px", padding:"7px 14px", fontSize:"12px", fontWeight:700, cursor:"pointer" }}>
+                        <Check size={12}/> {yearSaving ? "Saving…" : "Save"}
+                      </button>
+                      <button onClick={() => { setEditingYearId(null); setYearError(""); }}
+                        style={{ background:C.offwhite, border:`1px solid ${C.border}`, borderRadius:"7px", padding:"7px 12px", fontSize:"12px", cursor:"pointer", color:C.textMuted }}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                );
+
+                return (
+                  <div key={yr.id} style={{ display:"flex", alignItems:"center", gap:"10px", padding:"12px 14px", borderRadius:"10px", border:`1px solid ${C.border}`, marginBottom:"8px", background:C.white }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
+                        <span style={{ fontSize:"15px", fontWeight:700, color:C.navy }}>{yr.label}</span>
+                        {isCurrent && <span style={{ fontSize:"10px", background:"#eef3fc", color:C.navyLight, border:`1px solid ${C.navyLight}40`, padding:"1px 7px", borderRadius:"4px", fontWeight:700 }}>Current</span>}
+                      </div>
+                      <div style={{ fontSize:"12px", color:C.textMuted, marginTop:"2px" }}>
+                        {formatDateShort(yr.from)} – {formatDateShort(yr.to)} · {entryCount} entries
+                      </div>
+                    </div>
+                    <button onClick={() => startEditYear(yr)}
+                      style={{ width:"30px", height:"30px", display:"flex", alignItems:"center", justifyContent:"center", background:"#eef3fc", border:`1px solid ${C.navyLight}30`, borderRadius:"7px", cursor:"pointer", color:C.navyLight, flexShrink:0 }}>
+                      <Pencil size={13}/>
+                    </button>
+                    <button onClick={() => handleDeleteYear(yr)}
+                      style={{ width:"30px", height:"30px", display:"flex", alignItems:"center", justifyContent:"center", background:"#fdf2f2", border:`1px solid #fca5a5`, borderRadius:"7px", cursor:"pointer", color:"#dc2626", flexShrink:0 }}>
+                      <Trash2 size={13}/>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Create New Year button at bottom */}
+            <div style={{ padding:"16px 26px 22px", flexShrink:0 }}>
+              <button onClick={() => { setShowManage(false); setShowCreate(true); }}
+                style={{ width:"100%", background:C.navy, color:C.white, border:"none", borderRadius:"9px", padding:"12px", fontWeight:700, fontSize:"14px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:"8px" }}>
+                <Plus size={15}/> Create New Year
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════
+          CREATE NEW YEAR MODAL
+      ════════════════════════════════════════ */}
+      {showCreate && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(15,25,50,0.55)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:200 }}>
+          <div style={{ background:C.white, borderRadius:"16px", width:"420px", maxWidth:"95vw", boxShadow:"0 24px 64px rgba(26,58,107,0.28)", overflow:"hidden" }}>
             <div style={{ height:"3px", background:`linear-gradient(90deg,${C.navy},${C.red})` }}/>
             <div style={{ padding:"24px 28px 22px" }}>
               <div style={{ fontSize:"18px", fontWeight:800, color:C.navy, marginBottom:"20px" }}>Create Academic Year</div>
 
-              <div style={{ display:"flex", flexDirection:"column", gap:"16px", marginBottom:"20px" }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:"14px", marginBottom:"20px" }}>
                 <div>
-                  <label style={{ fontSize:"12px", fontWeight:700, color:C.textMuted, display:"block", marginBottom:"6px", textTransform:"uppercase", letterSpacing:"0.05em" }}>Academic Year</label>
-                  <input
-                    value={newYear.label}
-                    onChange={e => setNewYear(p => ({...p, label: e.target.value}))}
-                    placeholder="e.g. 2026/2027"
-                    style={modalInput}/>
+                  <label style={{ fontSize:"11px", fontWeight:700, color:C.textMuted, display:"block", marginBottom:"6px", textTransform:"uppercase", letterSpacing:"0.05em" }}>Academic Year</label>
+                  <input value={newYear.label} onChange={e=>setNewYear(p=>({...p,label:e.target.value}))} placeholder="e.g. 2026/2027" style={modalInput}/>
                 </div>
-                <div>
-                  <label style={{ fontSize:"12px", fontWeight:700, color:C.textMuted, display:"block", marginBottom:"6px", textTransform:"uppercase", letterSpacing:"0.05em" }}>Start Date</label>
-                  <input type="date" value={newYear.from}
-                    onChange={e => handleYearDateChange('from', e.target.value)}
-                    style={modalInput}/>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"10px" }}>
+                  <div>
+                    <label style={{ fontSize:"11px", fontWeight:700, color:C.textMuted, display:"block", marginBottom:"6px", textTransform:"uppercase", letterSpacing:"0.05em" }}>Start Date</label>
+                    <input type="date" value={newYear.from} onChange={e=>handleNewYearDateChange('from', e.target.value)} style={modalInput}/>
+                  </div>
+                  <div>
+                    <label style={{ fontSize:"11px", fontWeight:700, color:C.textMuted, display:"block", marginBottom:"6px", textTransform:"uppercase", letterSpacing:"0.05em" }}>End Date</label>
+                    <input type="date" value={newYear.to} onChange={e=>handleNewYearDateChange('to', e.target.value)} style={modalInput}/>
+                  </div>
                 </div>
+
+                {/* Starting data options */}
                 <div>
-                  <label style={{ fontSize:"12px", fontWeight:700, color:C.textMuted, display:"block", marginBottom:"6px", textTransform:"uppercase", letterSpacing:"0.05em" }}>End Date</label>
-                  <input type="date" value={newYear.to}
-                    onChange={e => handleYearDateChange('to', e.target.value)}
-                    style={modalInput}/>
+                  <label style={{ fontSize:"11px", fontWeight:700, color:C.textMuted, display:"block", marginBottom:"8px", textTransform:"uppercase", letterSpacing:"0.05em" }}>Starting Data</label>
+                  <div style={{ display:"flex", flexDirection:"column", gap:"8px" }}>
+                    <div style={radioBox(copyMode === "empty")} onClick={() => setCopyMode("empty")}>
+                      <div style={{ width:"16px", height:"16px", borderRadius:"50%", border:`2px solid ${copyMode==="empty"?C.navy:C.border}`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                        {copyMode === "empty" && <div style={{ width:"7px", height:"7px", borderRadius:"50%", background:C.navy }}/>}
+                      </div>
+                      <div>
+                        <div style={{ fontSize:"13px", fontWeight:600, color:C.navy }}>Start empty</div>
+                        <div style={{ fontSize:"11px", color:C.textMuted }}>New blank schedule — add entries manually</div>
+                      </div>
+                    </div>
+
+                    <div style={radioBox(copyMode === "copy")} onClick={() => setCopyMode("copy")}>
+                      <div style={{ width:"16px", height:"16px", borderRadius:"50%", border:`2px solid ${copyMode==="copy"?C.navy:C.border}`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                        {copyMode === "copy" && <div style={{ width:"7px", height:"7px", borderRadius:"50%", background:C.navy }}/>}
+                      </div>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:"13px", fontWeight:600, color:C.navy }}>Copy from</div>
+                        <div style={{ fontSize:"11px", color:C.textMuted, marginBottom:"6px" }}>Shift all entries from another year</div>
+                        {copyMode === "copy" && (
+                          <select value={copyFromLabel} onChange={e=>setCopyFromLabel(e.target.value)}
+                            style={{ ...modalInput, fontSize:"13px", padding:"6px 10px" }}
+                            onClick={e=>e.stopPropagation()}>
+                            {schoolYears.map(y => (
+                              <option key={y.label} value={y.label}>{y.label} ({getRowsForYear(y.label).length} entries)</option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {newYearError && (
-                <div style={{ background:"#fdf2f2", border:`1px solid #f5c6c6`, borderRadius:"8px", padding:"10px 14px", fontSize:"13px", color:"#dc2626", marginBottom:"16px" }}>
-                  {newYearError}
+              {createError && (
+                <div style={{ background:"#fdf2f2", border:`1px solid #f5c6c6`, borderRadius:"8px", padding:"10px 14px", fontSize:"13px", color:"#dc2626", marginBottom:"14px" }}>
+                  {createError}
                 </div>
               )}
 
               <div style={{ display:"flex", gap:"10px" }}>
-                <button onClick={() => { setShowNewYear(false); setNewYearError(""); setNewYear({ label:"", from:"", to:"" }); }}
+                <button onClick={() => { setShowCreate(false); setCreateError(""); setNewYear({ label:"", from:"", to:"" }); setCopyMode("empty"); }}
                   style={{ flex:1, background:C.offwhite, border:`1px solid ${C.border}`, borderRadius:"9px", padding:"11px", cursor:"pointer", color:C.textMuted, fontWeight:600, fontSize:"14px" }}>
                   Cancel
                 </button>
-                <button onClick={handleCreateYear} disabled={newYearSaving}
+                <button onClick={handleCreateYear} disabled={createSaving}
                   style={{ flex:2, background:C.navy, color:C.white, border:"none", borderRadius:"9px", padding:"11px", fontWeight:700, fontSize:"14px", cursor:"pointer" }}>
-                  {newYearSaving ? "Creating…" : "Create Year"}
+                  {createSaving ? "Creating…" : "Create Year"}
                 </button>
               </div>
             </div>
           </div>
         </div>
       )}
-
-      {/* ── Copy Year modal ── */}
-      {showCopyModal && (() => {
-        const fromRows = getRowsForYear(copyFrom);
-        const toRows   = getRowsForYear(copyTo);
-        const canCopy  = copyFrom !== copyTo && fromRows.length > 0;
-        const sel      = { padding:"9px 12px", borderRadius:"8px", border:`1.5px solid ${C.navyLight}40`, fontSize:"14px", background:C.white, width:"100%", outline:"none", fontWeight:600 };
-        return (
-          <div style={{ position:"fixed", inset:0, background:"rgba(15,25,50,0.55)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:200 }}>
-            <div style={{ background:C.white, borderRadius:"16px", width:"460px", maxWidth:"95vw", boxShadow:"0 24px 64px rgba(26,58,107,0.28)", overflow:"hidden" }}>
-              <div style={{ height:"3px", background:`linear-gradient(90deg,${C.navy},${C.red})` }}/>
-              <div style={{ padding:"22px 26px 18px" }}>
-                <div style={{ fontSize:"17px", fontWeight:800, color:C.navy, marginBottom:"4px" }}>Copy Academic Year</div>
-                <div style={{ fontSize:"13px", color:C.textMuted, marginBottom:"22px" }}>Copy all entries from one year to another, shifting dates proportionally.</div>
-
-                <div style={{ display:"grid", gridTemplateColumns:"1fr auto 1fr", gap:"10px", alignItems:"end", marginBottom:"16px" }}>
-                  <div>
-                    <label style={{ fontSize:"11px", fontWeight:700, color:C.textMuted, display:"block", marginBottom:"5px", textTransform:"uppercase" }}>Copy From</label>
-                    <select value={copyFrom} onChange={e => setCopyFrom(e.target.value)} style={sel}>
-                      {schoolYears.map(y => <option key={y.label} value={y.label}>{y.label}  ({getRowsForYear(y.label).length} rows)</option>)}
-                    </select>
-                  </div>
-                  <div style={{ paddingBottom:"10px", color:C.textMuted, fontSize:"18px" }}>→</div>
-                  <div>
-                    <label style={{ fontSize:"11px", fontWeight:700, color:C.textMuted, display:"block", marginBottom:"5px", textTransform:"uppercase" }}>Copy To</label>
-                    <select value={copyTo} onChange={e => setCopyTo(e.target.value)} style={sel}>
-                      {schoolYears.map(y => <option key={y.label} value={y.label}>{y.label}  ({getRowsForYear(y.label).length} rows)</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                {copyFrom === copyTo ? (
-                  <div style={{ background:"#fdf2f2", border:`1px solid #f5c6c6`, borderRadius:"8px", padding:"10px 14px", fontSize:"13px", color:"#dc2626", marginBottom:"16px" }}>Source and destination must be different.</div>
-                ) : fromRows.length === 0 ? (
-                  <div style={{ background:"#fdf2f2", border:`1px solid #f5c6c6`, borderRadius:"8px", padding:"10px 14px", fontSize:"13px", color:"#dc2626", marginBottom:"16px" }}>No rows in {copyFrom} to copy.</div>
-                ) : (
-                  <div style={{ background:"#eef3fc", border:`1px solid ${C.navyLight}30`, borderRadius:"8px", padding:"10px 14px", fontSize:"13px", color:C.navy, marginBottom:"16px", lineHeight:1.6 }}>
-                    <strong>{fromRows.length} rows</strong> from {copyFrom} will be copied to {copyTo}.
-                    {toRows.length > 0 && <span style={{ color:C.textMuted }}> {copyTo} already has {toRows.length} existing rows.</span>}
-                  </div>
-                )}
-
-                <div style={{ display:"flex", gap:"8px" }}>
-                  <button onClick={duplicateYear} disabled={!canCopy || yearDuping}
-                    style={{ flex:1, background:canCopy?C.navy:C.offwhite, color:canCopy?C.white:C.textMuted, border:"none", borderRadius:"8px", padding:"12px", fontWeight:700, fontSize:"14px", cursor:canCopy?"pointer":"not-allowed" }}>
-                    {yearDuping ? "Copying…" : `Copy ${fromRows.length} rows →`}
-                  </button>
-                  <button onClick={() => setShowCopyModal(false)}
-                    style={{ background:C.offwhite, border:`1px solid ${C.border}`, borderRadius:"8px", padding:"12px 20px", cursor:"pointer", color:C.textMuted, fontWeight:600, fontSize:"13px" }}>
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* ── Auto-fill recurring modal ── */}
       {showRecur && (
@@ -390,33 +485,29 @@ export default function TableView({ schedules, tableRows, onReload }) {
               <span style={{ fontSize:"11px", background:"#eef3fc", color:C.navyLight, border:`1px solid ${C.navyLight}40`, padding:"2px 8px", borderRadius:"4px", fontWeight:700 }}>Current</span>
             )}
           </div>
-          {/* Year dropdown — shows only year label */}
+          {/* Year dropdown + settings gear */}
           <div style={{ display:"flex", alignItems:"center", gap:"8px", marginTop:"8px" }}>
             <span style={{ fontSize:"12px", fontWeight:700, color:C.textMuted, textTransform:"uppercase", letterSpacing:"0.05em" }}>Year:</span>
             <div style={{ position:"relative", display:"inline-flex", alignItems:"center" }}>
               <select value={activeYear}
                 onChange={e => { setActiveYear(e.target.value); setFilterCode(""); setFilterType(""); setFilterMonth(""); setSortKey("date_asc"); }}
                 style={{ appearance:"none", padding:"5px 28px 5px 10px", borderRadius:"7px", border:`1.5px solid ${C.navyLight}50`, fontSize:"13px", background:"#eef3fc", color:C.navyLight, fontWeight:700, outline:"none", cursor:"pointer" }}>
-                {schoolYears.map(y => (
-                  <option key={y.label} value={y.label}>{y.label}</option>
-                ))}
+                {schoolYears.map(y => <option key={y.label} value={y.label}>{y.label}</option>)}
               </select>
               <ChevronDown size={13} color={C.navyLight} style={{ position:"absolute", right:"8px", pointerEvents:"none" }}/>
             </div>
+            {/* ⚙️ Manage Years */}
+            <button onClick={() => { setEditingYearId(null); setYearError(""); setShowManage(true); }}
+              title="Manage Academic Years"
+              style={{ width:"28px", height:"28px", display:"flex", alignItems:"center", justifyContent:"center", background:C.offwhite, border:`1px solid ${C.border}`, borderRadius:"7px", cursor:"pointer", color:C.textMuted }}>
+              <Settings size={14}/>
+            </button>
             <span style={{ fontSize:"12px", color:C.textMuted }}>{yearRows.length} entries</span>
           </div>
         </div>
 
         {/* Action buttons */}
         <div style={{ display:"flex", gap:"8px", flexWrap:"wrap", alignItems:"center" }}>
-          <button onClick={() => setShowNewYear(true)}
-            style={{ background:"#f0f9ff", color:"#0369a1", border:"1.5px solid #7dd3fc", borderRadius:"10px", padding:"10px 16px", fontSize:"13px", fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:"6px" }}>
-            <CalendarPlus size={13}/> Create New Year
-          </button>
-          <button onClick={() => { setCopyFrom(schoolYears[1]?.label||""); setCopyTo(schoolYears[0]?.label||""); setShowCopyModal(true); }}
-            style={{ background:"#fdf8ee", color:"#92600a", border:"1.5px solid #fcd34d", borderRadius:"10px", padding:"10px 16px", fontSize:"13px", fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:"6px" }}>
-            <Copy size={13}/> Copy Year
-          </button>
           <button onClick={() => setShowRecur(true)}
             style={{ background:"#f0fbf4", color:C.success, border:"1.5px solid #86efac", borderRadius:"10px", padding:"10px 16px", fontSize:"13px", fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:"6px" }}>
             <RefreshCw size={13}/> Auto-Fill Recurring
@@ -433,9 +524,7 @@ export default function TableView({ schedules, tableRows, onReload }) {
         <div style={{ display:"flex", alignItems:"center", gap:"5px", color:activeFilters > 0 ? C.navyLight : C.textMuted }}>
           <Filter size={13}/>
           <span style={{ fontSize:"12px", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.05em" }}>Filter</span>
-          {activeFilters > 0 && (
-            <span style={{ background:C.navyLight, color:C.white, borderRadius:"10px", fontSize:"10px", padding:"1px 6px", fontWeight:800 }}>{activeFilters}</span>
-          )}
+          {activeFilters > 0 && <span style={{ background:C.navyLight, color:C.white, borderRadius:"10px", fontSize:"10px", padding:"1px 6px", fontWeight:800 }}>{activeFilters}</span>}
         </div>
         <select value={filterCode} onChange={e => setFilterCode(e.target.value)}
           style={{ padding:"6px 10px", borderRadius:"7px", border:`1.5px solid ${filterCode?C.navyLight+"60":C.border}`, fontSize:"12px", background:filterCode?"#eef3fc":C.white, color:filterCode?C.navyLight:C.textMuted, fontWeight:700, outline:"none", cursor:"pointer" }}>
@@ -475,9 +564,7 @@ export default function TableView({ schedules, tableRows, onReload }) {
       {/* ── Table ── */}
       <div style={{ background:C.white, borderRadius:"14px", border:`1px solid ${C.border}`, overflow:"hidden" }}>
         <div style={{ height:"3px", background:`linear-gradient(90deg,${C.navy},${C.red})` }}/>
-
-        {/* Header */}
-        <div style={{ ...headerGrid, background:C.offwhite, borderBottom:`2px solid ${C.border}` }}>
+        <div style={{ ...grid, background:C.offwhite, borderBottom:`2px solid ${C.border}` }}>
           <div style={colStyle}>Code</div>
           <div style={colStyle}>From</div>
           <div style={colStyle}>To</div>
@@ -485,7 +572,6 @@ export default function TableView({ schedules, tableRows, onReload }) {
           <div style={{ width:"32px" }}/>
         </div>
 
-        {/* Inline add row */}
         {adding && (
           <div style={{ ...grid, background:"#eef3fc", borderBottom:`1px solid #c5d8f5` }}>
             <select value={newRow.code} onChange={e=>setNewRow(p=>({...p,code:e.target.value}))} style={{...inputStyle,fontFamily:"monospace",fontWeight:700}}>
@@ -508,7 +594,6 @@ export default function TableView({ schedules, tableRows, onReload }) {
           </div>
         )}
 
-        {/* Data rows */}
         {visibleRows.map((row, i) => {
           const isEditing = editingId === row.id;
           const color     = getSchColor(row.code, schedules);
