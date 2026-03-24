@@ -16,43 +16,35 @@ const apiCall = async (endpoint, options = {}) => {
 };
 
 // Auth
-export const login = (email, password) =>
-  apiCall('/login', { method: 'POST', body: JSON.stringify({ email, password }) });
-export const logout = () => apiCall('/logout', { method: 'POST' });
-export const checkAuth = () => apiCall('/check-auth', { method: 'GET' });
+export const login     = (email, password) => apiCall('/login',      { method: 'POST', body: JSON.stringify({ email, password }) });
+export const logout    = ()                 => apiCall('/logout',     { method: 'POST' });
+export const checkAuth = ()                 => apiCall('/check-auth', { method: 'GET'  });
 
 // Schedules
-export const getSchedules = () => apiCall('/schedules', { method: 'GET' });
-export const createSchedule = (data) =>
-  apiCall('/schedules', { method: 'POST', body: JSON.stringify(data) });
-export const updateSchedule = (id, data) =>
-  apiCall(`/schedules/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-export const deleteSchedule = (id) =>
-  apiCall(`/schedules/${id}`, { method: 'DELETE' });
+export const getSchedules    = ()          => apiCall('/schedules',        { method: 'GET'    });
+export const createSchedule  = (data)      => apiCall('/schedules',        { method: 'POST',   body: JSON.stringify(data) });
+export const updateSchedule  = (id, data)  => apiCall(`/schedules/${id}`,  { method: 'PUT',    body: JSON.stringify(data) });
+export const deleteSchedule  = (id)        => apiCall(`/schedules/${id}`,  { method: 'DELETE' });
 
 // Table rows
-export const getTableRows = () => apiCall('/table-rows', { method: 'GET' });
-export const createTableRow = (data) =>
-  apiCall('/table-rows', { method: 'POST', body: JSON.stringify(data) });
-export const updateTableRow = (id, data) =>
-  apiCall(`/table-rows/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-export const deleteTableRow = (id) =>
-  apiCall(`/table-rows/${id}`, { method: 'DELETE' });
-export const replaceDateRows = (dateStr, rows) =>
-  apiCall(`/table-rows/date/${dateStr}`, { method: 'PUT', body: JSON.stringify(rows) });
+export const getTableRows    = ()              => apiCall('/table-rows',              { method: 'GET'    });
+export const createTableRow  = (data)          => apiCall('/table-rows',              { method: 'POST',   body: JSON.stringify(data) });
+export const updateTableRow  = (id, data)      => apiCall(`/table-rows/${id}`,        { method: 'PUT',    body: JSON.stringify(data) });
+export const deleteTableRow  = (id)            => apiCall(`/table-rows/${id}`,        { method: 'DELETE' });
+export const replaceDateRows = (dateStr, rows) => apiCall(`/table-rows/date/${dateStr}`, { method: 'PUT', body: JSON.stringify(rows) });
 
 // Ringtone mappings
-export const getRingtoneMappings = () => apiCall('/ringtone-mappings', { method: 'GET' });
-export const saveRingtoneMappings = (data) =>
-  apiCall('/ringtone-mappings', { method: 'PUT', body: JSON.stringify(data) });
+export const getRingtoneMappings  = ()     => apiCall('/ringtone-mappings', { method: 'GET' });
+export const saveRingtoneMappings = (data) => apiCall('/ringtone-mappings', { method: 'PUT', body: JSON.stringify(data) });
+
+// School Years
+export const getSchoolYears    = ()          => apiCall('/school-years',       { method: 'GET'    });
+export const createSchoolYear  = (data)      => apiCall('/school-years',       { method: 'POST',   body: JSON.stringify(data) });
+export const updateSchoolYear  = (id, data)  => apiCall(`/school-years/${id}`, { method: 'PUT',    body: JSON.stringify(data) });
+export const deleteSchoolYear  = (id)        => apiCall(`/school-years/${id}`, { method: 'DELETE' });
 
 // Default export for AuthContext compatibility
 export default {
-  get: (endpoint) => apiCall(endpoint, { method: 'GET' }),
+  get:  (endpoint)       => apiCall(endpoint, { method: 'GET' }),
   post: (endpoint, data) => apiCall(endpoint, { method: 'POST', body: JSON.stringify(data) }),
 };
-
-// School Years
-export const getSchoolYears   = ()     => apiCall('/school-years', { method: 'GET' });
-export const createSchoolYear = (data) => apiCall('/school-years', { method: 'POST', body: JSON.stringify(data) });
-export const deleteSchoolYear = (id)   => apiCall(`/school-years/${id}`, { method: 'DELETE' });
