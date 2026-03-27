@@ -103,7 +103,6 @@ def init_db():
 
         conn.commit()
 
-        # Seed default school years if empty
         cur.execute("SELECT COUNT(*) as count FROM school_years")
         if cur.fetchone()['count'] == 0:
             default_years = [
@@ -123,7 +122,6 @@ def init_db():
             conn.commit()
             print("✅ Default school years seeded")
 
-        # Seed Normal schedule if empty
         cur.execute("SELECT COUNT(*) as count FROM schedules WHERE is_normal = TRUE")
         if cur.fetchone()['count'] == 0:
             cur.execute("""
@@ -204,7 +202,8 @@ def update_symlink(slot, filename):
     if os.path.islink(symlink):
         os.remove(symlink)
     if filename:
-        os.symlink(f'{filename}.wav', symlink)
+        target = filename if filename.endswith('.wav') else f'{filename}.wav'
+        os.symlink(target, symlink)
 
 def remove_symlink(slot):
     """Remove a .ring symlink."""
