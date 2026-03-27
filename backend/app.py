@@ -41,6 +41,8 @@ USERS = {
     }
 }
 
+SOUNDFILES_DIR = os.path.expanduser('~/piring/soundfiles')
+
 # ============================================================================
 # DATABASE
 # ============================================================================
@@ -194,6 +196,22 @@ def row_to_school_year(row):
         'to':    row['to_date'],
     }
 
+def update_symlink(slot, filename):
+    """Create or update a .ring symlink in the piring soundfiles directory."""
+    if not os.path.exists(SOUNDFILES_DIR):
+        return
+    symlink = os.path.join(SOUNDFILES_DIR, f'{slot}.ring')
+    if os.path.islink(symlink):
+        os.remove(symlink)
+    if filename:
+        os.symlink(f'{filename}.wav', symlink)
+
+def remove_symlink(slot):
+    """Remove a .ring symlink."""
+    symlink = os.path.join(SOUNDFILES_DIR, f'{slot}.ring')
+    if os.path.islink(symlink):
+        os.remove(symlink)
+
 # ============================================================================
 # AUTH
 # ============================================================================
@@ -266,6 +284,23 @@ def create_school_year():
         return jsonify({'error': f"Year '{data['label']}' already exists"}), 409
     cur.close(); conn.close()
     return jsonify(row_to_school_year(row)), 201
+
+@app.route('/api/school-years/<sid>', methods=['PUT'])
+@login_required
+def update_school_year(sid):
+    data = request.json
+    conn = get_db(); cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE school_years SET label=%s, from_date=%s, to_date=%s WHERE id=%s RETURNING *
+        """, (data['label'], data['from'], data['to'], sid))
+        row = cur.fetchone(); conn.commit()
+    except psycopg2.errors.UniqueViolation:
+        conn.rollback(); cur.close(); conn.close()
+        return jsonify({'error': f"Year '{data['label']}' already exists"}), 409
+    cur.close(); conn.close()
+    if not row: return jsonify({'error': 'Not found'}), 404
+    return jsonify(row_to_school_year(row))
 
 @app.route('/api/school-years/<sid>', methods=['DELETE'])
 @login_required
@@ -445,8 +480,10 @@ def save_ringtone_mappings():
                     INSERT INTO ringtone_mappings (slot, filename) VALUES (%s, %s)
                     ON CONFLICT (slot) DO UPDATE SET filename = EXCLUDED.filename
                 """, (slot, filename))
+                update_symlink(slot, filename)
             else:
                 cur.execute("DELETE FROM ringtone_mappings WHERE slot=%s", (slot,))
+                remove_symlink(slot)
         except (ValueError, TypeError):
             continue
     conn.commit(); cur.close(); conn.close()
@@ -484,7 +521,7 @@ def public_ringtimes():
 
         for sch in special:
             if not sch['times']: continue
-            if sch['code'].startswith('#'): continue  # skip # codes
+            if sch['code'].startswith('#'): continue
             sch_char = sch['code'][0]
             slot = str(sch['bell_slot']) if sch['bell_slot'] is not None else '0'
             lines.append("")
@@ -516,7 +553,7 @@ def public_ringdates():
 
         for row in rows:
             code     = row['code']
-            if code.startswith('#'): continue  # skip # codes
+            if code.startswith('#'): continue
             from_d   = row['from_date']
             to_d     = row['to_date'] or ''
             comment  = row['comment'] or ''
