@@ -18,7 +18,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-in-production')
 
 CORS(app,
-     origins=["http://192.168.5.25:3000", "http://192.168.5.25:3001", "http://localhost:3000", "http://localhost:3001", "http://localhost:5173", "https://bell-webapp.vercel.app"],
+     origins=["http://192.168.5.25:3000", "http://localhost:3000", "http://localhost:5173", "https://bell-webapp.vercel.app"],
      supports_credentials=True,
      allow_headers=['Content-Type', 'Authorization'],
      methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
