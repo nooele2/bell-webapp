@@ -20,6 +20,22 @@ export const login     = (email, password) => apiCall('/login',      { method: '
 export const logout    = ()                 => apiCall('/logout',     { method: 'POST' });
 export const checkAuth = ()                 => apiCall('/check-auth', { method: 'GET'  });
 
+// Users (admin only)
+export const getUsers    = ()          => apiCall('/users',       { method: 'GET'    });
+export const createUser  = (data)      => apiCall('/users',       { method: 'POST',   body: JSON.stringify(data) });
+export const updateUser  = (id, data)  => apiCall(`/users/${id}`, { method: 'PUT',    body: JSON.stringify(data) });
+export const deleteUser  = (id)        => apiCall(`/users/${id}`, { method: 'DELETE' });
+
+// Audit log (admin only)
+export const getAuditLog = (limit = 100) => apiCall(`/audit-log?limit=${limit}`, { method: 'GET' });
+
+// Snapshots
+export const getSnapshots      = ()      => apiCall('/snapshots',              { method: 'GET'    });
+export const createSnapshot    = (data)  => apiCall('/snapshots',              { method: 'POST',   body: JSON.stringify(data) });
+export const getSnapshot       = (id)    => apiCall(`/snapshots/${id}`,        { method: 'GET'    });
+export const restoreSnapshot   = (id)    => apiCall(`/snapshots/${id}/restore`,{ method: 'POST'   });
+export const deleteSnapshot    = (id)    => apiCall(`/snapshots/${id}`,        { method: 'DELETE' });
+
 // Schedules
 export const getSchedules    = ()          => apiCall('/schedules',        { method: 'GET'    });
 export const createSchedule  = (data)      => apiCall('/schedules',        { method: 'POST',   body: JSON.stringify(data) });
